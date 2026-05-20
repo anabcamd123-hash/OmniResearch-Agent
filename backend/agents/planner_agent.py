@@ -1,22 +1,44 @@
+from backend.executor.task import Task
+
 from backend.utils.logger import stream_log
+
 
 class PlannerAgent:
 
     async def create_plan(self, task: str):
 
-        await stream_log(f"[Planner] Received task: {task}")
+        await stream_log(
+            f"[Planner] Creating DAG workflow for: {task}"
+        )
 
-        subtasks = [
-            "research",
-            "generate_code",
-            "verify"
+        tasks = [
+
+            Task(
+                task_id="research",
+                task_type="research"
+            ),
+
+            Task(
+                task_id="coding",
+                task_type="coding",
+                dependencies=["research"]
+            ),
+
+            Task(
+                task_id="verify",
+                task_type="verify",
+                dependencies=["coding"]
+            ),
+
+            Task(
+                task_id="reflection",
+                task_type="reflection",
+                dependencies=["verify"]
+            )
         ]
 
         await stream_log(
-            f"[Planner] Created {len(subtasks)} subtasks"
+            f"[Planner] DAG created with {len(tasks)} tasks"
         )
 
-        return {
-            "task": task,
-            "subtasks": subtasks
-        }
+        return tasks
