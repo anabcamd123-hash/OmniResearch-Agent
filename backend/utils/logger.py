@@ -19,3 +19,7 @@ async def stream_log(message: str):
 
     except:
         pass
+token_usage = {"total": 0}
+
+def log_tokens(tokens: int):
+    token_usage["total"] += tokens
