@@ -1,10 +1,10 @@
-from backend.utils.logger import logger
+from backend.utils.logger import stream_log
 
 class PlannerAgent:
 
-    def create_plan(self, task: str):
+    async def create_plan(self, task: str):
 
-        logger.info(f"[Planner] Received task: {task}")
+        await stream_log(f"[Planner] Received task: {task}")
 
         subtasks = [
             "research",
@@ -12,7 +12,9 @@ class PlannerAgent:
             "verify"
         ]
 
-        logger.info(f"[Planner] Created {len(subtasks)} subtasks")
+        await stream_log(
+            f"[Planner] Created {len(subtasks)} subtasks"
+        )
 
         return {
             "task": task,
