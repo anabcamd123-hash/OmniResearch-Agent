@@ -4,7 +4,7 @@ class PlannerAgent:
 
     def create_plan(self, task: str):
 
-        logger.info(f\"[Planner] Received task: {task}\")
+        logger.info(f"[Planner] Received task: {task}")
 
         subtasks = [
             "research",
@@ -12,7 +12,7 @@ class PlannerAgent:
             "verify"
         ]
 
-        logger.info(f\"[Planner] Created {len(subtasks)} subtasks\")
+        logger.info(f"[Planner] Created {len(subtasks)} subtasks")
 
         return {
             "task": task,
