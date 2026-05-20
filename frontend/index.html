@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>OmniResearch Dashboard</title>
+
+    <style>
+
+        body {
+            background: #0f172a;
+            color: white;
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
+        #logs {
+            height: 400px;
+            overflow-y: scroll;
+            background: black;
+            padding: 10px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <h1>OmniResearch Agent Dashboard</h1>
+
+    <div class="card">
+
+        <h2>System Status</h2>
+
+        <p id="status">
+            Runtime Active
+        </p>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Live Logs</h2>
+
+        <div id="logs"></div>
+
+    </div>
+
+    <script>
+
+        const logs = document.getElementById("logs")
+
+        const ws = new WebSocket(
+            "ws://127.0.0.1:8000/ws/logs"
+        )
+
+        ws.onmessage = (event) => {
+
+            const div = document.createElement("div")
+
+            div.innerText = event.data
+
+            logs.appendChild(div)
+
+            logs.scrollTop = logs.scrollHeight
+        }
+
+    </script>
+
+</body>
+
+</html>
