@@ -1,27 +1,10 @@
-from backend.agents.planner_agent import PlannerAgent
-from backend.agents.research_agent import ResearchAgent
-from backend.agents.coding_agent import CodingAgent
-from backend.agents.verify_agent import VerifyAgent
-from backend.agents.reflection_agent import ReflectionAgent
-
-from backend.utils.logger import logger
-
-
 class WorkflowExecutor:
 
-    def __init__(self):
+    async def execute(self, task: str):
 
-        self.planner = PlannerAgent()
-        self.research = ResearchAgent()
-        self.coding = CodingAgent()
-        self.verify = VerifyAgent()
-        self.reflection = ReflectionAgent()
+        await stream_log("[System] Starting workflow")
 
-    def execute(self, task: str):
-
-        logger.info("[System] Starting workflow")
-
-        plan = self.planner.create_plan(task)
+        plan = await self.planner.create_plan(task)
 
         research_result = self.research.run(task)
 
@@ -31,7 +14,7 @@ class WorkflowExecutor:
 
         reflection_result = self.reflection.run(verify_result)
 
-        logger.info("[System] Workflow completed")
+        await stream_log("[System] Workflow completed")
 
         return {
             "plan": plan,
