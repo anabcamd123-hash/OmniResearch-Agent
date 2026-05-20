@@ -13,7 +13,7 @@ class TaskRequest(BaseModel):
 @router.post("/task")
 async def create_task(req: TaskRequest):
 
-    result = executor.execute(req.task)
+    result = await executor.execute(req.task)
 
     return {
         "success": True,
