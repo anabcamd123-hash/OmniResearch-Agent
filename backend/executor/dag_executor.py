@@ -61,3 +61,24 @@ class DAGExecutor:
                 await stream_log(
                     f"[Executor] Completed task: {task.task_id}"
                 )
+                MAX_RETRIES = 2
+
+async def run_task(self, task):
+    retries = 0
+    while retries <= MAX_RETRIES:
+        task.status = "running"
+        await stream_log(f"[Executor] Running task: {task.task_id}")
+        try:
+            # 模拟执行
+            await asyncio.sleep(1)
+            # 假设 verify task 模拟失败
+            if task.task_id == "verify" and retries < 1:
+                raise Exception("Simulated failure")
+            task.status = "completed"
+            self.completed_tasks.add(task.task_id)
+            await stream_log(f"[Executor] Completed task: {task.task_id}")
+            break
+        except Exception as e:
+            retries += 1
+            await stream_log(f"[Executor] Task {task.task_id} failed, retry {retries}: {e}")
+            task.status = "pending"
