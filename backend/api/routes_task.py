@@ -1,11 +1,11 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from backend.agents.planner_agent import PlannerAgent
+from backend.executor.workflow_executor import WorkflowExecutor
 
 router = APIRouter()
 
-planner = PlannerAgent()
+executor = WorkflowExecutor()
 
 class TaskRequest(BaseModel):
     task: str
@@ -13,9 +13,9 @@ class TaskRequest(BaseModel):
 @router.post("/task")
 async def create_task(req: TaskRequest):
 
-    plan = planner.create_plan(req.task)
+    result = executor.execute(req.task)
 
     return {
         "success": True,
-        "plan": plan
+        "workflow": result
     }
