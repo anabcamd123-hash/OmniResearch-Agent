@@ -1,25 +1,19 @@
 # OmniResearch Agent
 
-AI Multi-Agent Research Platform
+Multi-Agent Research Platform with DAG Workflow, RAG Memory, and Tool Routing.
 
 ## Features
 
-- Multi-Agent Workflow (Planner → Research → Coding → Verify → Reflection)
-- DAG Runtime with dependency-based execution
-- Real-time Dashboard (WebSocket + auto-refresh)
-- PDF RAG (upload papers, vector search, cited answers)
-- GitHub Analyzer (stars, forks, issues)
-- Python Runtime (execute generated code)
-- Web Search (DuckDuckGo integration)
-- Auto-fix Code (LLM sees error, fixes, re-executes)
-- Memory Store (Agent context sharing)
-- Tool Router (auto-select Web/GitHub/PDF)
-- SQLite Persistence (tasks, workflows, logs survive restart)
-- Token Tracking (per-agent token usage)
-- Mermaid DAG Visualization (auto-generated workflow graphs)
-- Multi-Provider LLM (OpenAI / Gemini / DeepSeek)
-- Retry System (configurable retries with status tracking)
-- Docker Compose (backend + frontend + Redis)
+- **Multi-Agent System** — Planner, Research, Coding, Verify, Reflection
+- **DAG Workflow Engine** — Dependency-based parallel execution
+- **RAG Memory** — FAISS + sentence-transformers, learns from experience
+- **Tool Router** — LLM-powered tool selection (Web/GitHub/PDF/RAG)
+- **Auto-Fix Loop** — Code → Execute → Fail → Reflect → Retry
+- **Event Bus** — Decoupled logging, dashboard, WebSocket
+- **SQLite Persistence** — Tasks, workflows, memories survive restart
+- **Multi-Provider LLM** — OpenAI, Gemini, DeepSeek, Ollama
+- **Real-time Dashboard** — WebSocket logs, metrics, trace
+- **Observability** — Trace stream, metrics, agent performance
 
 ## Architecture
 
@@ -30,51 +24,22 @@ User Task
 PlannerAgent (LLM plan)
     │
     ▼
-┌─────────────────────────────────┐
-│  DAG Executor                   │
-│  ┌───────────┐                  │
-│  │ Research   │← Tool Router    │
-│  │            │  ├─ Web Search  │
-│  │            │  ├─ GitHub      │
-│  │            │  └─ PDF RAG     │
-│  └─────┬─────┘                  │
-│        ▼                        │
-│  ┌───────────┐                  │
-│  │ Coding     │→ Python Runtime │
-│  │            │→ Auto-fix       │
-│  └─────┬─────┘                  │
-│        ▼                        │
-│  ┌───────────┐                  │
-│  │ Verify     │← LLM Evaluate   │
-│  └─────┬─────┘                  │
-│        ▼                        │
-│  ┌───────────┐                  │
-│  │ Reflection │← LLM Analysis   │
-│  └───────────┘                  │
-└─────────────────────────────────┘
+┌─────────────────────────────────────┐
+│  DAGExecutor                        │
+│  ┌──────────────┐                   │
+│  │ AgentRegistry │                   │
+│  │  ├─research   │→ ToolRouter      │
+│  │  ├─coding     │→ PythonRuntime   │
+│  │  ├─verify     │→ LLM Evaluate    │
+│  │  └─reflection │→ Learning Memory │
+│  └──────────────┘                   │
+│  ExecutionContext (shared state)    │
+│  EventBus (observers)               │
+└─────────────────────────────────────┘
     │
     ▼
-Dashboard + SQLite + Memory
+SQLite ← Logger, Dashboard, WebSocket
 ```
-
-## DAG Workflow
-
-```
-graph TD
-    Research --> Coding
-    Coding --> Verify
-    Verify --> Reflection
-```
-
-## Dashboard
-
-Real-time panels:
-- Runtime Metrics (tasks, tokens)
-- Agent Status (idle/running/completed)
-- DAG Workflow (Mermaid visualization)
-- Task History (with duration)
-- Agent Timeline (color-coded events)
-- Live Logs (WebSocket streaming)
 
 ## Quick Start
 
@@ -90,42 +55,79 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your API keys
 
-# Run backend
+# Run
 uvicorn backend.main:app --reload
 
-# Run frontend (separate terminal)
-cd frontend && python3 -m http.server 5500
+# Frontend (separate terminal)
+cd dashboard && python3 -m http.server 5500
 ```
-
-Open: http://127.0.0.1:5500
 
 ## Docker
 
 ```bash
-docker compose up
+docker compose up --build
 ```
 
-## API Endpoints
+## API
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/health/full` | GET | Full system check |
 | `/task` | POST | Submit research task |
 | `/dashboard` | GET | Runtime metrics |
+| `/metrics` | GET | Token/call/retry stats |
+| `/trace` | GET | Execution event stream |
 | `/history` | GET | Task history |
-| `/db/tasks` | GET | SQLite task records |
-| `/db/workflows` | GET | SQLite workflow records |
+| `/tasks` | GET | DB task records |
+| `/memory` | GET | Agent memories |
 | `/upload-pdf` | POST | Upload PDF for RAG |
-| `/ws/logs` | WS | Live log stream |
+| `/ws/logs` | WebSocket | Live log stream |
+
+## LLM Providers
+
+```env
+# OpenAI
+MODEL_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+
+# Ollama (local, free)
+MODEL_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:8b
+
+# DeepSeek
+MODEL_PROVIDER=deepseek
+DEEPSEEK_API_KEY=...
+```
 
 ## Tech Stack
 
-- **Backend**: FastAPI, asyncio
-- **LLM**: OpenAI / Gemini / DeepSeek (factory pattern)
-- **Database**: SQLite + Redis
+- **Backend**: FastAPI, asyncio, SQLAlchemy
+- **LLM**: OpenAI / Gemini / DeepSeek / Ollama
+- **Database**: SQLite (async via aiosqlite)
 - **RAG**: FAISS + sentence-transformers
 - **Search**: DuckDuckGo + GitHub API
 - **Frontend**: Vanilla JS + Mermaid
 - **Container**: Docker Compose
+
+## Roadmap
+
+- [x] Multi-Agent System
+- [x] DAG Workflow Engine
+- [x] RAG Memory with FAISS
+- [x] Tool Router (LLM-powered)
+- [x] Auto-Fix Loop
+- [x] Event Bus Architecture
+- [x] SQLite Persistence
+- [x] Multi-Provider LLM
+- [x] Ollama Support
+- [x] Observability (Trace/Metrics)
+- [x] Docker Compose
+- [x] Health Checks
+- [ ] MCP Integration
+- [ ] PostgreSQL Support
+- [ ] Auth & Multi-tenancy
 
 ## License
 

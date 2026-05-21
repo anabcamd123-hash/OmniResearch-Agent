@@ -1,14 +1,16 @@
-import os
+from backend.config.settings import settings
 from backend.llm.base_provider import BaseProvider
 from backend.llm.openai_provider import OpenAIProvider
 from backend.llm.gemini_provider import GeminiProvider
 from backend.llm.deepseek_provider import DeepSeekProvider
+from backend.llm.ollama_provider import OllamaProvider
 
 
 PROVIDERS = {
     "openai": OpenAIProvider,
     "gemini": GeminiProvider,
     "deepseek": DeepSeekProvider,
+    "ollama": OllamaProvider,
 }
 
 _provider_instance = None
@@ -21,9 +23,7 @@ def get_provider():
     if _provider_instance:
         return _provider_instance
 
-    provider_name = os.getenv(
-        "MODEL_PROVIDER", "openai"
-    ).lower()
+    provider_name = settings.MODEL_PROVIDER.lower()
 
     if provider_name not in PROVIDERS:
         raise ValueError(
