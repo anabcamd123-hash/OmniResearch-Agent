@@ -1,6 +1,9 @@
+import time
 import asyncio
 from backend.executor.task_graph import TaskGraph
 from backend.utils.logger import stream_log
+from backend.runtime.task_history import history
+from backend.runtime.runtime_state import state
 
 MAX_RETRIES = 2
 
@@ -23,17 +26,44 @@ class DAGExecutor:
         retries = 0
         while retries <= MAX_RETRIES:
             task.status = 'running'
+            task.start_time = time.time()
             await stream_log(f'[Executor] Running task: {task.task_id}')
+
+            state.timeline.append({
+                "agent": task.task_type.capitalize(),
+                "event": "started"
+            })
+
             try:
                 # 模拟任务执行
                 await asyncio.sleep(1)
                 if task.task_id == 'verify' and retries < 1:
                     raise Exception('Simulated failure')
+
+                task.end_time = time.time()
+                duration = task.end_time - task.start_time
                 task.status = 'completed'
                 self.completed_tasks.add(task.task_id)
                 await stream_log(f'[Executor] Completed task: {task.task_id}')
+
+                history.add_record(task.task_id, 'completed', duration)
+
+                state.timeline.append({
+                    "agent": task.task_type.capitalize(),
+                    "event": "completed"
+                })
+
                 break
             except Exception as e:
+                task.end_time = time.time()
+                duration = task.end_time - task.start_time
                 retries += 1
                 task.status = 'pending'
                 await stream_log(f'[Executor] Task {task.task_id} failed, retry {retries}: {e}')
+
+                history.add_record(task.task_id, 'failed', duration)
+
+                state.timeline.append({
+                    "agent": task.task_type.capitalize(),
+                    "event": "failed"
+                })

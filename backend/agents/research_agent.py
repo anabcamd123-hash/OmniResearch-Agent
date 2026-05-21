@@ -7,6 +7,11 @@ class ResearchAgent:
 
         state.agent_status["research"] = "running"
 
+        state.timeline.append({
+            "agent": "Research",
+            "event": "started"
+        })
+
         logger.info("[ResearchAgent] Searching knowledge base...")
 
         result = {
@@ -22,5 +27,10 @@ class ResearchAgent:
         logger.info("[ResearchAgent] Research completed")
 
         state.agent_status["research"] = "completed"
+
+        state.timeline.append({
+            "agent": "Research",
+            "event": "completed"
+        })
 
         return result

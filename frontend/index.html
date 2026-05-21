@@ -28,7 +28,41 @@
             padding: 10px;
         }
 
+        #history {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .timeline-item .started {
+            color: #38bdf8;
+        }
+
+        .timeline-item .completed {
+            color: #4ade80;
+        }
+
+        .timeline-item .failed {
+            color: #f87171;
+        }
+
     </style>
+
+    <script type="module">
+        import mermaid from
+        'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark'
+        });
+
+        window.mermaid = mermaid;
+    </script>
 
 </head>
 
@@ -55,6 +89,33 @@
         <h2>Agent Status</h2>
 
         <pre id="agents"></pre>
+
+    </div>
+
+    <div class="card">
+
+        <h2>DAG Workflow</h2>
+
+        <div id="dag" class="mermaid">
+graph TD
+    Loading...
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Task History</h2>
+
+        <pre id="history"></pre>
+
+    </div>
+
+    <div class="card">
+
+        <h2>Agent Timeline</h2>
+
+        <div id="timeline"></div>
 
     </div>
 
@@ -121,12 +182,48 @@
                     null,
                     2
                 )
+
+            // DAG
+            if (data.dag && data.dag.trim()) {
+                const dagEl = document.getElementById("dag")
+                dagEl.textContent = data.dag
+                dagEl.removeAttribute("data-processed")
+                if (window.mermaid) {
+                    window.mermaid.init(undefined, dagEl)
+                }
+            }
+
+            // Timeline
+            if (data.timeline && data.timeline.length > 0) {
+                const timelineEl = document.getElementById("timeline")
+                timelineEl.innerHTML = data.timeline.map(
+                    t => `<div class="timeline-item">
+                        <span class="${t.event}">${t.agent} ${t.event}</span>
+                    </div>`
+                ).join("")
+            }
         }
 
-        setInterval(
-            updateDashboard,
-            1000
-        )
+        async function updateHistory() {
+
+            const res = await fetch(
+                "http://127.0.0.1:8000/history"
+            )
+
+            const data = await res.json()
+
+            document.getElementById(
+                "history"
+            ).innerText =
+                JSON.stringify(
+                    data,
+                    null,
+                    2
+                )
+        }
+
+        setInterval(updateDashboard, 1000)
+        setInterval(updateHistory, 1000)
 
     </script>
 

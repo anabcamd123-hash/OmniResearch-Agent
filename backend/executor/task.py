@@ -1,4 +1,5 @@
 from typing import List
+import time
 
 class Task:
 
@@ -16,6 +17,10 @@ class Task:
         self.dependencies = dependencies or []
 
         self.status = "pending"
+
+        self.start_time = None
+
+        self.end_time = None
 
     def is_ready(self, completed_tasks):
 

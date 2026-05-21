@@ -7,6 +7,11 @@ class VerifyAgent:
 
         state.agent_status["verify"] = "running"
 
+        state.timeline.append({
+            "agent": "Verify",
+            "event": "started"
+        })
+
         logger.info("[VerifyAgent] Running verification...")
 
         success = True
@@ -16,6 +21,11 @@ class VerifyAgent:
         logger.info("[VerifyAgent] Verification passed")
 
         state.agent_status["verify"] = "completed"
+
+        state.timeline.append({
+            "agent": "Verify",
+            "event": "completed"
+        })
 
         return {
             "success": success,

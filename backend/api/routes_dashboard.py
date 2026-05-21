@@ -12,5 +12,7 @@ async def dashboard():
         "completed_tasks": state.completed_tasks,
         "running_tasks": state.running_tasks,
         "token_usage": state.token_usage,
-        "agents": state.agent_status
+        "agents": state.agent_status,
+        "dag": state.current_dag,
+        "timeline": state.timeline
     }

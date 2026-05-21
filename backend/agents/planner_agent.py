@@ -9,6 +9,11 @@ class PlannerAgent:
 
         state.agent_status["planner"] = "running"
 
+        state.timeline.append({
+            "agent": "Planner",
+            "event": "started"
+        })
+
         await stream_log(
             f"[Planner] Creating DAG workflow for: {task}"
         )
@@ -39,10 +44,22 @@ class PlannerAgent:
             )
         ]
 
+        state.current_dag = """
+graph TD
+    Research --> Coding
+    Coding --> Verify
+    Verify --> Reflection
+"""
+
         await stream_log(
             f"[Planner] DAG created with {len(tasks)} tasks"
         )
 
         state.agent_status["planner"] = "completed"
+
+        state.timeline.append({
+            "agent": "Planner",
+            "event": "completed"
+        })
 
         return tasks

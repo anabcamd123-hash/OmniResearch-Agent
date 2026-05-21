@@ -7,6 +7,11 @@ class CodingAgent:
 
         state.agent_status["coding"] = "running"
 
+        state.timeline.append({
+            "agent": "Coding",
+            "event": "started"
+        })
+
         logger.info("[CodingAgent] Generating code...")
 
         code = '''
@@ -19,6 +24,11 @@ def train():
         logger.info("[CodingAgent] Code generation completed")
 
         state.agent_status["coding"] = "completed"
+
+        state.timeline.append({
+            "agent": "Coding",
+            "event": "completed"
+        })
 
         return {
             "code": code

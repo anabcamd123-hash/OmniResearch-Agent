@@ -10,6 +10,10 @@ class RuntimeState:
 
         self.token_usage = 0
 
+        self.current_dag = ""
+
+        self.timeline = []
+
         self.agent_status = {
             "planner": "idle",
             "research": "idle",
