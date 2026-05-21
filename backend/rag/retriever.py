@@ -1,18 +1,31 @@
-from backend.rag.embeddings import embed
+from backend.rag.embedder import Embedder
+from backend.rag.vector_store import VectorStore
 
 
 class Retriever:
 
-    def __init__(self, store):
+    def __init__(self):
 
-        self.store = store
+        self.embedder = Embedder()
 
-    def retrieve(
-        self,
-        query,
-        k=3
-    ):
+        self.vector_store = VectorStore(
+            dim=384
+        )
 
-        q = embed([query])[0]
+    def add_document(self, text: str):
 
-        return self.store.search(q, k)
+        vec = self.embedder.encode(text)
+
+        self.vector_store.add(vec, text)
+
+    def retrieve(self, query: str, top_k=5):
+
+        vec = self.embedder.encode(query)
+
+        return self.vector_store.search(
+            vec, top_k
+        )
+
+    def clear(self):
+
+        self.vector_store.clear()

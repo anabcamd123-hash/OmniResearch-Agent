@@ -4,40 +4,43 @@ import numpy as np
 
 class VectorStore:
 
-    def __init__(self):
+    def __init__(self, dim: int = 384):
 
-        self.index = faiss.IndexFlatL2(384)
+        self.index = faiss.IndexFlatL2(dim)
 
-        self.documents = []
+        self.texts = []
 
-    def add(
-        self,
-        vectors,
-        chunks
-    ):
+    def add(self, vector, text: str):
 
-        self.index.add(
-            np.array(vectors)
+        vec = np.array([vector]).astype(
+            "float32"
         )
 
-        self.documents.extend(chunks)
+        self.index.add(vec)
 
-    def search(
-        self,
-        query_vector,
-        k=3
-    ):
+        self.texts.append(text)
 
-        D, I = self.index.search(
-            np.array([query_vector]),
-            k
+    def search(self, vector, top_k=5):
+
+        vec = np.array([vector]).astype(
+            "float32"
         )
 
-        return [
-            self.documents[i]
-            for i in I[0]
-            if i < len(self.documents)
-        ]
+        D, I = self.index.search(vec, top_k)
 
+        results = []
 
-vector_store = VectorStore()
+        for idx in I[0]:
+
+            if idx < len(self.texts):
+
+                results.append(self.texts[idx])
+
+        return results
+
+    def clear(self):
+
+        self.index = faiss.IndexFlatL2(
+            self.index.d
+        )
+        self.texts = []

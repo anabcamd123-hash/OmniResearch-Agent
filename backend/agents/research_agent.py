@@ -3,15 +3,13 @@ from backend.runtime.runtime_state import state
 from backend.tools.web_search import WebSearch
 from backend.tools.github_analyzer import GithubAnalyzer
 from backend.tools.tool_router import ToolRouter
-from backend.rag.vector_store import vector_store
-from backend.rag.retriever import Retriever
+from backend.rag.rag_service import rag_service
 from backend.memory.memory_store import memory
 from backend.llm.provider_factory import get_provider
 
 web_search = WebSearch()
 github = GithubAnalyzer()
 router = ToolRouter()
-retriever = Retriever(vector_store)
 llm = get_provider()
 
 
@@ -43,6 +41,25 @@ class ResearchAgent:
         search_results = []
         github_data = None
 
+        # === Always RAG from memory ===
+        try:
+            rag_results = await rag_service.query(
+                task, top_k=3
+            )
+            if rag_results:
+                rag_context = (
+                    "Historical context:\n"
+                    + "\n---\n".join(rag_results)
+                )
+                logger.info(
+                    f"[ResearchAgent] "
+                    f"RAG: {len(rag_results)} chunks"
+                )
+        except Exception as e:
+            logger.info(
+                f"[ResearchAgent] RAG error: {e}"
+            )
+
         # === GitHub ===
         if tool == "github":
             parts = task.split("/")
@@ -67,31 +84,26 @@ Description: {github_data.get('description')}
                     f"{github_data.get('stars')}"
                 )
 
-        # === PDF / RAG ===
+        # === PDF RAG ===
         if tool == "pdf":
             try:
-                rag_results = retriever.retrieve(
-                    task, k=3
+                pdf_results = await rag_service.query(
+                    task, top_k=5
                 )
-                if rag_results:
+                if pdf_results:
                     rag_context = (
                         "Document Context:\n"
                         + "\n---\n".join(
-                            rag_results
+                            pdf_results
                         )
                     )
-                    logger.info(
-                        f"[ResearchAgent] "
-                        f"RAG: {len(rag_results)} chunks"
-                    )
-            except Exception as e:
-                logger.info(
-                    f"[ResearchAgent] RAG error: {e}"
-                )
+            except Exception:
+                pass
 
         # === Web Search ===
         if tool == "web" or (
-            not github_text and not rag_context
+            not github_text
+            and not search_results
         ):
             search_results = (
                 web_search.search(task)
@@ -105,16 +117,16 @@ Description: {github_data.get('description')}
                 f"{len(search_results)} sources"
             )
 
-        # LLM Summary
+        # LLM Summary with context
         summary = llm.invoke(
             f"""
 Summarize the following research results.
 
 Task: {task}
 
+{rag_context if rag_context else ""}
 {f"Sources:\n{sources_text}" if sources_text else ""}
 {github_text if github_text else ""}
-{rag_context if rag_context else ""}
 
 Provide a concise summary (2-3 sentences).
 """
@@ -134,6 +146,9 @@ Provide a concise summary (2-3 sentences).
 
         # Save to memory (DB)
         await memory.add(result, source="research")
+
+        # Add to RAG index
+        await rag_service.add(summary)
 
         log_tokens(120)
 

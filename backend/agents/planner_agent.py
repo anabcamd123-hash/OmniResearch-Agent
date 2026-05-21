@@ -1,6 +1,7 @@
 from backend.executor.task import Task
 from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
+from backend.rag.rag_service import rag_service
 from backend.llm.provider_factory import get_provider
 
 llm = get_provider()
@@ -44,8 +45,22 @@ class PlannerAgent:
             f"workflow for: {task}"
         )
 
+        # RAG: retrieve historical context
+        rag_context = await rag_service.query(
+            task, top_k=3
+        )
+
+        context_text = ""
+        if rag_context:
+            context_text = (
+                "Historical context:\n"
+                + "\n---\n".join(rag_context)
+            )
+
         prompt = f"""
 Create a workflow plan for this task.
+
+{context_text if context_text else ""}
 
 Task: {task}
 

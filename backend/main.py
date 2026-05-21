@@ -12,6 +12,7 @@ from backend.api.routes_db import router as db_router
 from backend.api.routes_upload import router as upload_router
 from backend.api.routes_memory import router as memory_router
 from backend.storage.init_db import init_db
+from backend.rag.rag_service import rag_service
 
 app = FastAPI()
 
@@ -35,6 +36,7 @@ app.include_router(memory_router)
 @app.on_event("startup")
 async def startup():
     await init_db()
+    await rag_service.build_index()
 
 
 @app.get("/")
