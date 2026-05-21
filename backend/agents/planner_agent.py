@@ -6,6 +6,28 @@ from backend.llm.provider_factory import get_provider
 llm = get_provider()
 
 
+def build_mermaid(tasks):
+
+    lines = ["graph TD"]
+
+    for task in tasks:
+
+        for dep in task.dependencies:
+
+            lines.append(
+                f"    {dep} --> {task.task_id}"
+            )
+
+    if not any(t.dependencies for t in tasks):
+        for i in range(len(tasks) - 1):
+            lines.append(
+                f"    {tasks[i].task_id} --> "
+                f"{tasks[i + 1].task_id}"
+            )
+
+    return "\n".join(lines)
+
+
 class PlannerAgent:
 
     async def create_plan(self, task: str):
@@ -18,7 +40,8 @@ class PlannerAgent:
         })
 
         await stream_log(
-            f"[Planner] Creating DAG workflow for: {task}"
+            f"[Planner] Creating DAG "
+            f"workflow for: {task}"
         )
 
         prompt = f"""
@@ -47,16 +70,16 @@ Format:
         for line in plan_text.strip().split("\n"):
             line = line.strip()
             if line and line[0].isdigit():
-                # Remove number prefix
                 parts = line.split(".", 1)
                 if len(parts) > 1:
                     steps.append(parts[1].strip())
                 else:
                     steps.append(line)
 
-        # Ensure we have exactly 4 steps
         while len(steps) < 4:
-            steps.append(f"Step {len(steps) + 1}")
+            steps.append(
+                f"Step {len(steps) + 1}"
+            )
 
         steps = steps[:4]
 
@@ -70,7 +93,6 @@ Format:
         for i, (step, task_type) in enumerate(
             zip(steps, task_types)
         ):
-
             deps = []
             if i > 0:
                 deps = [tasks[i - 1].task_id]
@@ -83,19 +105,17 @@ Format:
                 )
             )
 
-        state.current_dag = """
-graph TD
-    Research --> Coding
-    Coding --> Verify
-    Verify --> Reflection
-"""
+        # Auto-generate Mermaid DAG
+        state.current_dag = build_mermaid(tasks)
 
         await stream_log(
             f"[Planner] DAG created with "
             f"{len(tasks)} tasks"
         )
 
-        state.agent_status["planner"] = "completed"
+        state.agent_status["planner"] = (
+            "completed"
+        )
 
         state.timeline.append({
             "agent": "Planner",
