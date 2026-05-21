@@ -1,8 +1,9 @@
 import os
 import requests
+from backend.llm.base_provider import BaseProvider
 
 
-class GeminiProvider:
+class GeminiProvider(BaseProvider):
 
     def __init__(self):
 
@@ -10,7 +11,8 @@ class GeminiProvider:
 
         self.base_url = (
             "https://generativelanguage.googleapis.com"
-            "/v1beta/models/gemini-2.0-flash:generateContent"
+            "/v1beta/models/gemini-2.0-flash"
+            ":generateContent"
         )
 
     def invoke(

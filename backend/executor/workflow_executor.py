@@ -34,25 +34,25 @@ class WorkflowExecutor:
             source="workflow",
         )
 
+        # Create plan (dynamic)
+        tasks = await self.planner.run(task)
+
         # DB: create workflow
         await self.workflow_repo.create_workflow(
             workflow_id=workflow_id,
             objective=task,
-            total_tasks=4,
+            total_tasks=len(tasks),
         )
 
         await self.workflow_repo.update_status(
             workflow_id, "running"
         )
 
-        # Create plan
-        tasks = await self.planner.create_plan(task)
-
         # DB: create tasks
         for t in tasks:
             await self.task_repo.create_task(
                 task_id=f"{workflow_id}_{t.task_id}",
-                objective=t.task_id,
+                objective=t.task_type,
             )
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
@@ -113,6 +113,7 @@ class WorkflowExecutor:
             "tasks": [
                 {
                     "task_id": t.task_id,
+                    "task_type": t.task_type,
                     "status": t.status,
                 }
                 for t in tasks

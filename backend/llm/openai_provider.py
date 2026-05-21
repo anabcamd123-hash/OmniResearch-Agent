@@ -1,8 +1,9 @@
 import os
 from openai import OpenAI
+from backend.llm.base_provider import BaseProvider
 
 
-class OpenAIProvider:
+class OpenAIProvider(BaseProvider):
 
     def __init__(self):
 

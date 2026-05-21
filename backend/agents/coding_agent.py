@@ -1,3 +1,5 @@
+import asyncio
+from backend.agents.base_agent import BaseAgent
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
 from backend.tools.python_runtime import PythonRuntime
@@ -27,9 +29,9 @@ class CodingResult:
         }
 
 
-class CodingAgent:
+class CodingAgent(BaseAgent):
 
-    def run(self, research_result):
+    async def run(self, research_result):
 
         state.agent_status["coding"] = "running"
 
@@ -51,7 +53,7 @@ class CodingAgent:
         else:
             task_desc = str(research_result)
 
-        # LLM generates code
+        # LLM generates code (async)
         prompt = f"""
 Write Python code based on this task.
 
@@ -67,7 +69,9 @@ Return ONLY the Python code.
 No markdown, no explanation.
 """
 
-        code = llm.invoke(prompt)
+        code = await asyncio.to_thread(
+            llm.invoke, prompt
+        )
 
         # Clean markdown code blocks
         code = self._clean_code(code)
@@ -76,8 +80,10 @@ No markdown, no explanation.
             "[CodingAgent] Executing code..."
         )
 
-        # Execute code
-        execution_result = runtime.execute(code)
+        # Execute code (async)
+        execution_result = await asyncio.to_thread(
+            runtime.execute, code
+        )
 
         log_tokens(250)
 

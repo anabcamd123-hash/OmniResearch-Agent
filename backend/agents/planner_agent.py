@@ -1,3 +1,6 @@
+import json
+import asyncio
+from backend.agents.base_agent import BaseAgent
 from backend.executor.task import Task
 from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
@@ -12,9 +15,7 @@ def build_mermaid(tasks):
     lines = ["graph TD"]
 
     for task in tasks:
-
         for dep in task.dependencies:
-
             lines.append(
                 f"    {dep} --> {task.task_id}"
             )
@@ -29,9 +30,9 @@ def build_mermaid(tasks):
     return "\n".join(lines)
 
 
-class PlannerAgent:
+class PlannerAgent(BaseAgent):
 
-    async def create_plan(self, task: str):
+    async def run(self, task: str):
 
         state.agent_status["planner"] = "running"
 
@@ -41,11 +42,10 @@ class PlannerAgent:
         })
 
         await stream_log(
-            f"[Planner] Creating DAG "
-            f"workflow for: {task}"
+            f"[Planner] Creating plan for: {task}"
         )
 
-        # RAG: retrieve historical context
+        # RAG context
         rag_context = await rag_service.query(
             task, top_k=3
         )
@@ -57,66 +57,63 @@ class PlannerAgent:
                 + "\n---\n".join(rag_context)
             )
 
+        # LLM dynamic plan generation
         prompt = f"""
-Create a workflow plan for this task.
+You are a workflow planner.
 
 {context_text if context_text else ""}
 
 Task: {task}
 
-Return ONLY a numbered list of steps.
-Each step should be concise (3-8 words).
-Use exactly 4 steps.
-Format:
-1. step one
-2. step two
-3. step three
-4. step four
+Available agent types:
+- research: Search, analyze, gather information
+- coding: Generate and execute code
+- verify: Evaluate result quality
+- reflection: Analyze and suggest improvements
+
+Return a JSON array of steps.
+Each step: {{"task": "<description>", "agent": "<agent_type>"}}
+Use 2-5 steps. Match agents to task needs.
+
+Example for "Analyze PDF":
+[
+  {{"task": "Parse and extract PDF content", "agent": "research"}},
+  {{"task": "Summarize key findings", "agent": "research"}},
+  {{"task": "Verify completeness", "agent": "verify"}}
+]
+
+Return ONLY the JSON array.
 """
 
-        plan_text = llm.invoke(prompt)
+        plan_text = await asyncio.to_thread(
+            llm.invoke, prompt
+        )
 
         await stream_log(
             f"[Planner] LLM plan:\n{plan_text}"
         )
 
-        # Parse steps from LLM response
-        steps = []
-        for line in plan_text.strip().split("\n"):
-            line = line.strip()
-            if line and line[0].isdigit():
-                parts = line.split(".", 1)
-                if len(parts) > 1:
-                    steps.append(parts[1].strip())
-                else:
-                    steps.append(line)
+        # Parse JSON plan
+        steps = self._parse_plan(plan_text)
 
-        while len(steps) < 4:
-            steps.append(
-                f"Step {len(steps) + 1}"
-            )
-
-        steps = steps[:4]
-
-        task_types = [
-            "research", "coding",
-            "verify", "reflection"
-        ]
-
+        # Build tasks from steps
         tasks = []
 
-        for i, (step, task_type) in enumerate(
-            zip(steps, task_types)
-        ):
+        for i, step in enumerate(steps):
             deps = []
             if i > 0:
                 deps = [tasks[i - 1].task_id]
 
+            task_id = (
+                f"step_{i}_"
+                f"{step['agent']}"
+            )
+
             tasks.append(
                 Task(
-                    task_id=task_type,
-                    task_type=task_type,
-                    dependencies=deps
+                    task_id=task_id,
+                    task_type=step["agent"],
+                    dependencies=deps,
                 )
             )
 
@@ -138,3 +135,40 @@ Format:
         })
 
         return tasks
+
+    def _parse_plan(self, plan_text: str):
+
+        # Try JSON parse
+        try:
+            # Extract JSON from text
+            text = plan_text.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+
+            steps = json.loads(text)
+
+            if isinstance(steps, list):
+                return steps[:5]
+        except json.JSONDecodeError:
+            pass
+
+        # Fallback: fixed plan
+        return [
+            {
+                "task": "Research and gather info",
+                "agent": "research"
+            },
+            {
+                "task": "Generate code",
+                "agent": "coding"
+            },
+            {
+                "task": "Verify result",
+                "agent": "verify"
+            },
+            {
+                "task": "Reflect and improve",
+                "agent": "reflection"
+            },
+        ]

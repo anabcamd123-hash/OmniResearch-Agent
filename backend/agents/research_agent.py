@@ -1,3 +1,5 @@
+import asyncio
+from backend.agents.base_agent import BaseAgent
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
 from backend.tools.router import tool_router
@@ -8,7 +10,7 @@ from backend.llm.provider_factory import get_provider
 llm = get_provider()
 
 
-class ResearchAgent:
+class ResearchAgent(BaseAgent):
 
     async def run(self, task: str):
 
@@ -40,8 +42,9 @@ class ResearchAgent:
         except Exception:
             pass
 
-        # LLM summarize
-        summary = llm.invoke(
+        # LLM summarize (async)
+        summary = await asyncio.to_thread(
+            llm.invoke,
             f"""
 Summarize the following research results.
 

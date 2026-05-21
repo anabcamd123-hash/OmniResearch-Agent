@@ -1,8 +1,8 @@
-from backend.tools.router import tool_router
-from backend.agents.reflection_agent import ReflectionAgent
-from backend.utils.logger import stream_log
-from backend.runtime.runtime_state import state
+import re
+import asyncio
+from backend.agents.base_agent import BaseAgent
 from backend.utils.logger import logger, log_tokens
+from backend.runtime.runtime_state import state
 from backend.llm.provider_factory import get_provider
 
 llm = get_provider()
@@ -28,9 +28,9 @@ class VerifyResult:
         }
 
 
-class VerifyAgent:
+class VerifyAgent(BaseAgent):
 
-    def run(self, result):
+    async def run(self, result):
 
         state.agent_status["verify"] = "running"
 
@@ -60,18 +60,18 @@ Reason: <one sentence>
 Pass: yes/no
 """
 
-        evaluation = llm.invoke(prompt)
+        evaluation = await asyncio.to_thread(
+            llm.invoke, prompt
+        )
 
-        # Parse score
+        # Parse score with regex (robust)
         score = 75
-        for line in evaluation.split("\n"):
-            if "score" in line.lower():
-                for word in line.split():
-                    try:
-                        score = int(word)
-                        break
-                    except ValueError:
-                        continue
+        match = re.search(
+            r"score[:\s]*(\d+)",
+            evaluation.lower()
+        )
+        if match:
+            score = int(match.group(1))
 
         score = min(max(score, 0), 100)
 

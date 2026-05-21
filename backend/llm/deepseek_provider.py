@@ -1,8 +1,9 @@
 import os
 from openai import OpenAI
+from backend.llm.base_provider import BaseProvider
 
 
-class DeepSeekProvider:
+class DeepSeekProvider(BaseProvider):
 
     def __init__(self):
 

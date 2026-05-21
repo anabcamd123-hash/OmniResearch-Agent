@@ -1,3 +1,5 @@
+import asyncio
+from backend.agents.base_agent import BaseAgent
 from backend.utils.logger import logger
 from backend.runtime.runtime_state import state
 from backend.storage.repository import MemoryRepository
@@ -21,7 +23,7 @@ class ReflectionResult:
         }
 
 
-class ReflectionAgent:
+class ReflectionAgent(BaseAgent):
 
     def __init__(self):
 
@@ -61,7 +63,9 @@ need_retry: true/false
 reason: <one sentence explanation>
 """
 
-        output = self.llm.invoke(prompt)
+        output = await asyncio.to_thread(
+            self.llm.invoke, prompt
+        )
 
         need_retry = "true" in output.lower()
 
@@ -70,7 +74,7 @@ reason: <one sentence explanation>
             reason=output.strip(),
         )
 
-        # Save learning memory
+        # Save learning memory (summarized)
         await self.save_learning(
             task, result, reflection
         )
@@ -104,14 +108,26 @@ reason: <one sentence explanation>
             else "failure"
         )
 
-        content = (
-            f"TASK: {task}\n"
-            f"RESULT: {str(result)[:500]}\n"
-            f"FEEDBACK: {reflection.reason}"
+        # Summarize into concise knowledge
+        summary_prompt = f"""
+Summarize this experience into one sentence
+of actionable knowledge.
+
+Task: {task}
+Feedback: {reflection.reason}
+Outcome: {"success" if not reflection.need_retry else "failure"}
+
+Return one sentence of knowledge.
+Example: "When generating Python code,
+always include error handling for file IO."
+"""
+
+        knowledge = await asyncio.to_thread(
+            self.llm.invoke, summary_prompt
         )
 
         await self.memory_repo.add_memory(
-            content=content,
+            content=knowledge.strip(),
             source="learning",
             memory_type=memory_type,
         )

@@ -20,13 +20,13 @@ class AutoFixExecutor:
             f"{objective[:50]}..."
         )
 
-        code = self.coder.run(objective)
+        code = await self.coder.run(objective)
 
         retry = 0
 
         while retry < self.MAX_RETRY:
 
-            verify = self.verifier.run(code)
+            verify = await self.verifier.run(code)
 
             if verify.passed:
                 await stream_log(
@@ -41,11 +41,11 @@ class AutoFixExecutor:
                 f"retry {retry + 1}"
             )
 
-            feedback = self.reflector.run(
-                {"code": code, "score": 0}
+            reflection = await self.reflector.run(
+                str(code.to_dict()), code
             )
 
-            code = self.coder.run(
+            code = await self.coder.run(
                 f"""
 Objective:
 {objective}
@@ -54,7 +54,7 @@ Previous code:
 {code.code}
 
 Fix based on feedback:
-{feedback.get('reflection', 'improve code')}
+{reflection.reason}
 
 {verify.feedback}
 """
