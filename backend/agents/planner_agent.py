@@ -3,9 +3,13 @@ import asyncio
 from backend.agents.base_agent import BaseAgent
 from backend.executor.task import Task
 from backend.executor.context import ExecutionContext
-from backend.utils.logger import stream_log
+from backend.utils.logger import logger
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    AGENT_STARTED,
+    AGENT_COMPLETED,
+)
 from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
 from backend.rag.rag_service import rag_service
 from backend.llm.provider_factory import get_provider
 
@@ -40,22 +44,15 @@ class PlannerAgent(BaseAgent):
         context: ExecutionContext = None,
     ):
 
-        state.agent_status["planner"] = "running"
-        state.timeline.append({
-            "agent": "Planner",
-            "event": "started",
-        })
+        await event_bus.publish(
+            AGENT_STARTED,
+            {"agent": "planner", "task": task},
+        )
 
-        await bus.publish("agent_started", {
-            "agent": "planner",
-            "task": task,
-        })
-
-        await stream_log(
+        logger.info(
             f"[Planner] Creating plan for: {task}"
         )
 
-        # RAG context
         rag_context = await rag_service.query(
             task, top_k=3
         )
@@ -67,7 +64,6 @@ class PlannerAgent(BaseAgent):
                 + "\n---\n".join(rag_context)
             )
 
-        # LLM dynamic plan
         prompt = f"""
 You are a workflow planner.
 
@@ -92,13 +88,12 @@ Return ONLY the JSON array.
             llm.invoke, prompt
         )
 
-        await stream_log(
+        logger.info(
             f"[Planner] LLM plan:\n{plan_text}"
         )
 
         steps = self._parse_plan(plan_text)
 
-        # Build tasks
         tasks = []
 
         for i, step in enumerate(steps):
@@ -119,21 +114,15 @@ Return ONLY the JSON array.
 
         state.current_dag = build_mermaid(tasks)
 
-        await stream_log(
+        logger.info(
             f"[Planner] DAG created with "
             f"{len(tasks)} tasks"
         )
 
-        state.agent_status["planner"] = "completed"
-        state.timeline.append({
-            "agent": "Planner",
-            "event": "completed",
-        })
-
-        await bus.publish("agent_completed", {
-            "agent": "planner",
-            "result": {"tasks": len(tasks)},
-        })
+        await event_bus.publish(
+            AGENT_COMPLETED,
+            {"agent": "planner"},
+        )
 
         return tasks
 

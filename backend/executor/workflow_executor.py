@@ -2,10 +2,11 @@ import uuid
 from backend.agents.planner_agent import PlannerAgent
 from backend.executor.dag_executor import DAGExecutor
 from backend.executor.context import ExecutionContext
-from backend.utils.logger import stream_log
-from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
-from backend.memory.memory_store import memory
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    WORKFLOW_STARTED,
+    WORKFLOW_COMPLETED,
+)
 from backend.storage.repository import (
     TaskRepository,
     WorkflowRepository,
@@ -27,19 +28,16 @@ class WorkflowExecutor:
         ctx = ExecutionContext()
         ctx.set("objective", task)
 
-        await bus.publish("workflow_started", {
-            "workflow_id": workflow_id,
-            "task": task,
-        })
-
-        await stream_log(
-            f"[System] Workflow {workflow_id} started"
+        await event_bus.publish(
+            WORKFLOW_STARTED,
+            {
+                "workflow_id": workflow_id,
+                "task": task,
+            },
         )
 
-        # Plan
         tasks = await self.planner.run(task, ctx)
 
-        # DB: create workflow
         await self.workflow_repo.create_workflow(
             workflow_id=workflow_id,
             objective=task,
@@ -49,7 +47,6 @@ class WorkflowExecutor:
             workflow_id, "running"
         )
 
-        # DB: create tasks
         for t in tasks:
             await self.task_repo.create_task(
                 task_id=(
@@ -62,10 +59,8 @@ class WorkflowExecutor:
                 "running",
             )
 
-        # Execute DAG
         await self.dag_executor.execute(tasks)
 
-        # DB: mark results
         completed = 0
         for t in tasks:
             is_done = t.status == "completed"
@@ -79,24 +74,24 @@ class WorkflowExecutor:
             )
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
-                "completed" if is_done else "failed",
+                "completed"
+                if is_done
+                else "failed",
             )
 
-        # DB: complete workflow
         await self.workflow_repo.complete_workflow(
             workflow_id=workflow_id,
             completed_tasks=completed,
             token_usage=0,
         )
 
-        await bus.publish("workflow_completed", {
-            "workflow_id": workflow_id,
-            "completed": completed,
-            "total": len(tasks),
-        })
-
-        await stream_log(
-            f"[System] Workflow {workflow_id} completed"
+        await event_bus.publish(
+            WORKFLOW_COMPLETED,
+            {
+                "workflow_id": workflow_id,
+                "completed": completed,
+                "total": len(tasks),
+            },
         )
 
         return {

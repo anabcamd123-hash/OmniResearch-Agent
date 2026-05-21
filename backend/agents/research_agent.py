@@ -3,8 +3,11 @@ from backend.agents.base_agent import BaseAgent
 from backend.agents.result import AgentResult
 from backend.executor.context import ExecutionContext
 from backend.utils.logger import logger, log_tokens
-from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    AGENT_STARTED,
+    AGENT_COMPLETED,
+)
 from backend.tools.router import tool_router
 from backend.rag.rag_service import rag_service
 from backend.memory.memory_store import memory
@@ -21,25 +24,17 @@ class ResearchAgent(BaseAgent):
         context: ExecutionContext,
     ):
 
-        state.agent_status["research"] = "running"
-        state.timeline.append({
-            "agent": "Research",
-            "event": "started",
-        })
-
-        await bus.publish("agent_started", {
-            "agent": "research",
-            "task": task,
-        })
+        await event_bus.publish(
+            AGENT_STARTED,
+            {"agent": "research", "task": task},
+        )
 
         logger.info(
             "[ResearchAgent] Analyzing..."
         )
 
-        # Tool execution
         tool_result = await tool_router.execute(task)
 
-        # RAG context
         rag_context = ""
         try:
             rag_results = await rag_service.query(
@@ -53,7 +48,6 @@ class ResearchAgent(BaseAgent):
         except Exception:
             pass
 
-        # LLM summarize
         summary = await asyncio.to_thread(
             llm.invoke,
             f"""
@@ -79,7 +73,6 @@ Provide a concise summary (2-3 sentences).
             },
         )
 
-        # Save to context for next agent
         context.set("research", result.content)
 
         await memory.add(
@@ -92,15 +85,9 @@ Provide a concise summary (2-3 sentences).
             "[ResearchAgent] Completed"
         )
 
-        state.agent_status["research"] = "completed"
-        state.timeline.append({
-            "agent": "Research",
-            "event": "completed",
-        })
-
-        await bus.publish("agent_completed", {
-            "agent": "research",
-            "result": result.to_dict(),
-        })
+        await event_bus.publish(
+            AGENT_COMPLETED,
+            {"agent": "research"},
+        )
 
         return result

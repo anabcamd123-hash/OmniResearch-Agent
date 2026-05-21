@@ -4,9 +4,13 @@ from backend.executor.task_graph import TaskGraph
 from backend.executor.context import ExecutionContext
 from backend.agents.registry import registry
 from backend.agents.reflection_agent import ReflectionAgent
-from backend.utils.logger import stream_log
-from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    TASK_STARTED,
+    TASK_COMPLETED,
+    TASK_FAILED,
+    TASK_RETRY,
+)
 
 
 class DAGExecutor:
@@ -40,21 +44,15 @@ class DAGExecutor:
     async def run_task(self, task):
         task.status = "running"
         task.start_time = time.time()
-        await stream_log(
-            f"[Executor] Running: {task.task_id}"
+
+        await event_bus.publish(
+            TASK_STARTED,
+            {
+                "task_id": task.task_id,
+                "task_type": task.task_type,
+            },
         )
 
-        state.timeline.append({
-            "agent": task.task_type.capitalize(),
-            "event": "started",
-        })
-
-        await bus.publish("task_started", {
-            "task_id": task.task_id,
-            "task_type": task.task_type,
-        })
-
-        # Get agent from registry
         agent = self.registry.get(
             task.task_type
         )
@@ -63,13 +61,11 @@ class DAGExecutor:
 
         while retry < self.max_retry:
 
-            # Execute agent
             result = await agent.run(
                 task.task_id,
                 self.context,
             )
 
-            # Check success
             if result.success:
                 task.result = result
                 task.end_time = time.time()
@@ -81,24 +77,16 @@ class DAGExecutor:
                     task.task_id
                 )
 
-                await stream_log(
-                    f"[Executor] Completed: "
-                    f"{task.task_id}"
+                await event_bus.publish(
+                    TASK_COMPLETED,
+                    {
+                        "task_id": task.task_id,
+                        "duration": task.duration,
+                    },
                 )
-
-                state.timeline.append({
-                    "agent": task.task_type.capitalize(),
-                    "event": "completed",
-                })
-
-                await bus.publish("task_completed", {
-                    "task_id": task.task_id,
-                    "status": "completed",
-                })
 
                 return
 
-            # Failed → reflect
             reflection = await self.reflector.run(
                 task.task_id, self.context
             )
@@ -114,35 +102,26 @@ class DAGExecutor:
                     task.task_id
                 )
 
-                await stream_log(
-                    f"[Executor] Accepted: "
-                    f"{task.task_id}"
+                await event_bus.publish(
+                    TASK_COMPLETED,
+                    {
+                        "task_id": task.task_id,
+                        "duration": task.duration,
+                    },
                 )
-
-                state.timeline.append({
-                    "agent": task.task_type.capitalize(),
-                    "event": "completed",
-                })
-
-                await bus.publish("task_completed", {
-                    "task_id": task.task_id,
-                    "status": "completed",
-                })
 
                 return
 
-            # Retry
             retry += 1
-            await stream_log(
-                f"[Executor] Retry {retry}: "
-                f"{task.task_id}"
-            )
 
-            await bus.publish("task_retry", {
-                "task_id": task.task_id,
-                "retry": retry,
-                "reason": reflection.content,
-            })
+            await event_bus.publish(
+                TASK_RETRY,
+                {
+                    "task_id": task.task_id,
+                    "retry": retry,
+                    "reason": reflection.content,
+                },
+            )
 
         # Max retries exceeded
         task.result = result
@@ -153,16 +132,10 @@ class DAGExecutor:
         task.status = "failed"
         self.completed_tasks.add(task.task_id)
 
-        await stream_log(
-            f"[Executor] Failed: {task.task_id}"
+        await event_bus.publish(
+            TASK_FAILED,
+            {
+                "task_id": task.task_id,
+                "duration": task.duration,
+            },
         )
-
-        state.timeline.append({
-            "agent": task.task_type.capitalize(),
-            "event": "failed",
-        })
-
-        await bus.publish("task_completed", {
-            "task_id": task.task_id,
-            "status": "failed",
-        })

@@ -4,8 +4,11 @@ from backend.agents.base_agent import BaseAgent
 from backend.agents.result import AgentResult
 from backend.executor.context import ExecutionContext
 from backend.utils.logger import logger, log_tokens
-from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    AGENT_STARTED,
+    AGENT_COMPLETED,
+)
 from backend.llm.provider_factory import get_provider
 
 llm = get_provider()
@@ -19,26 +22,14 @@ class VerifyAgent(BaseAgent):
         context: ExecutionContext,
     ):
 
-        state.agent_status["verify"] = "running"
-        state.timeline.append({
-            "agent": "Verify",
-            "event": "started",
-        })
-
-        await bus.publish("agent_started", {
-            "agent": "verify",
-            "task": "evaluating",
-        })
-
-        logger.info(
-            "[VerifyAgent] Evaluating..."
+        await event_bus.publish(
+            AGENT_STARTED,
+            {"agent": "verify"},
         )
 
-        # Read coding context
+        logger.info("[VerifyAgent] Evaluating...")
+
         coding_result = context.get("coding", "")
-        execution = context.get(
-            "coding_execution", {}
-        )
 
         prompt = f"""
 Evaluate this code result.
@@ -47,9 +38,6 @@ Task: {task}
 
 Code:
 {coding_result}
-
-Execution:
-{execution}
 
 Score 0-100 based on:
 - Correctness
@@ -89,19 +77,12 @@ Pass: yes/no
             score=score / 100,
         )
 
-        # Save to context
         context.set("verify", result.content)
         context.set("verify_score", score)
 
-        state.agent_status["verify"] = "completed"
-        state.timeline.append({
-            "agent": "Verify",
-            "event": "completed",
-        })
-
-        await bus.publish("agent_completed", {
-            "agent": "verify",
-            "result": result.to_dict(),
-        })
+        await event_bus.publish(
+            AGENT_COMPLETED,
+            {"agent": "verify"},
+        )
 
         return result

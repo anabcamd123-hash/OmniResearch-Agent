@@ -3,8 +3,11 @@ from backend.agents.base_agent import BaseAgent
 from backend.agents.result import AgentResult
 from backend.executor.context import ExecutionContext
 from backend.utils.logger import logger, log_tokens
-from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    AGENT_STARTED,
+    AGENT_COMPLETED,
+)
 from backend.tools.python_runtime import PythonRuntime
 from backend.llm.provider_factory import get_provider
 
@@ -20,22 +23,15 @@ class CodingAgent(BaseAgent):
         context: ExecutionContext,
     ):
 
-        state.agent_status["coding"] = "running"
-        state.timeline.append({
-            "agent": "Coding",
-            "event": "started",
-        })
-
-        await bus.publish("agent_started", {
-            "agent": "coding",
-            "task": task[:50],
-        })
+        await event_bus.publish(
+            AGENT_STARTED,
+            {"agent": "coding", "task": task[:50]},
+        )
 
         logger.info(
             "[CodingAgent] Generating code..."
         )
 
-        # Read research context
         research_context = context.get(
             "research", ""
         )
@@ -83,19 +79,12 @@ No markdown, no explanation.
             metadata={"execution": execution},
         )
 
-        # Save to context for next agent
         context.set("coding", result.content)
 
-        state.agent_status["coding"] = "completed"
-        state.timeline.append({
-            "agent": "Coding",
-            "event": "completed",
-        })
-
-        await bus.publish("agent_completed", {
-            "agent": "coding",
-            "result": result.to_dict(),
-        })
+        await event_bus.publish(
+            AGENT_COMPLETED,
+            {"agent": "coding"},
+        )
 
         return result
 

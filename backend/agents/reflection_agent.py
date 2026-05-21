@@ -3,8 +3,11 @@ from backend.agents.base_agent import BaseAgent
 from backend.agents.result import AgentResult
 from backend.executor.context import ExecutionContext
 from backend.utils.logger import logger
-from backend.runtime.runtime_state import state
-from backend.runtime.events import bus
+from backend.runtime.event_bus import event_bus
+from backend.runtime.event_types import (
+    AGENT_STARTED,
+    AGENT_COMPLETED,
+)
 from backend.storage.repository import MemoryRepository
 from backend.llm.provider_factory import get_provider
 
@@ -21,22 +24,15 @@ class ReflectionAgent(BaseAgent):
         context: ExecutionContext,
     ):
 
-        state.agent_status["reflection"] = "running"
-        state.timeline.append({
-            "agent": "Reflection",
-            "event": "started",
-        })
-
-        await bus.publish("agent_started", {
-            "agent": "reflection",
-            "task": task[:50],
-        })
+        await event_bus.publish(
+            AGENT_STARTED,
+            {"agent": "reflection"},
+        )
 
         logger.info(
             "[ReflectionAgent] Evaluating..."
         )
 
-        # Read all previous context
         research = context.get("research", "")
         coding = context.get("coding", "")
         verify = context.get("verify", "")
@@ -69,7 +65,6 @@ reason: <one sentence explanation>
         need_retry = "true" in output.lower()
         reason = output.strip()
 
-        # Save learning
         await self.save_learning(
             task, reason, need_retry
         )
@@ -80,24 +75,16 @@ reason: <one sentence explanation>
             metadata={"need_retry": need_retry},
         )
 
-        # Save to context
         context.set("reflection", result.content)
 
         logger.info(
-            f"[ReflectionAgent] "
-            f"retry={need_retry}"
+            f"[ReflectionAgent] retry={need_retry}"
         )
 
-        state.agent_status["reflection"] = "completed"
-        state.timeline.append({
-            "agent": "Reflection",
-            "event": "completed",
-        })
-
-        await bus.publish("agent_completed", {
-            "agent": "reflection",
-            "result": result.to_dict(),
-        })
+        await event_bus.publish(
+            AGENT_COMPLETED,
+            {"agent": "reflection"},
+        )
 
         return result
 
