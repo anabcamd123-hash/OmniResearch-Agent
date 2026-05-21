@@ -1,5 +1,7 @@
 # OmniResearch Agent
 
+> ⚠️ **Alpha v1.0.0** — 适用于研究和学习，不建议直接用于生产环境。
+
 Multi-Agent Research Platform with DAG Workflow, RAG Memory, and Tool Routing.
 
 ## Features
