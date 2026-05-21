@@ -1,13 +1,11 @@
 from backend.tools.base import BaseTool
+from backend.tools.result import ToolResult
 
 
 class RAGTool(BaseTool):
 
     name = "rag"
-    description = (
-        "Search historical knowledge "
-        "and past experiences"
-    )
+    description = "Search historical knowledge"
 
     def __init__(self, rag_service):
         self.rag = rag_service
@@ -18,7 +16,8 @@ class RAGTool(BaseTool):
             input, top_k=5
         )
 
-        return {
-            "context": results,
-            "sources": len(results),
-        }
+        return ToolResult(
+            success=True,
+            content=results,
+            metadata={"sources": len(results)},
+        )

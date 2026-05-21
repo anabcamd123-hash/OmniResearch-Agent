@@ -1,4 +1,5 @@
-import requests
+import httpx
+from typing import AsyncIterator
 from backend.llm.base_provider import BaseProvider
 from backend.config.settings import settings
 
@@ -17,7 +18,7 @@ class OllamaProvider(BaseProvider):
         temperature: float = 0.2,
     ):
 
-        response = requests.post(
+        response = httpx.post(
             f"{self.base_url}/api/generate",
             json={
                 "model": self.model,
@@ -33,3 +34,31 @@ class OllamaProvider(BaseProvider):
         data = response.json()
 
         return data.get("response", "")
+
+    async def stream(
+        self,
+        prompt: str,
+        temperature: float = 0.2,
+    ) -> AsyncIterator[str]:
+
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": True,
+                    "options": {
+                        "temperature": temperature
+                    },
+                },
+                timeout=300,
+            ) as response:
+                async for line in response.aiter_lines():
+                    if line:
+                        import json
+                        data = json.loads(line)
+                        chunk = data.get("response", "")
+                        if chunk:
+                            yield chunk

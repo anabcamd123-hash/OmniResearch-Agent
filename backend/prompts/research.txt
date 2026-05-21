@@ -1,0 +1,10 @@
+Summarize the following research results.
+
+Task: {task}
+
+Tool Result:
+{tool_result}
+
+{rag_context}
+
+Provide a concise summary (2-3 sentences).

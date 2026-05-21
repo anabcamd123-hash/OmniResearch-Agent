@@ -1,0 +1,17 @@
+You are a reflection system.
+
+Task: {task}
+
+Research: {research}
+Code: {coding}
+Verification: {verify}
+Score: {score}/100
+
+Decide:
+1. Is this result correct and complete?
+2. If not, why?
+3. Should we retry?
+
+Return format:
+need_retry: true/false
+reason: <one sentence explanation>

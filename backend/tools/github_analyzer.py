@@ -1,17 +1,21 @@
 import requests
 from backend.tools.base import BaseTool
+from backend.tools.result import ToolResult
 
 
 class GitHubAnalyzerTool(BaseTool):
 
     name = "github"
-    description = "Analyze GitHub repositories (stars, forks, issues)"
+    description = "Analyze GitHub repositories"
 
     async def run(self, input: str):
 
         parts = input.split("/")
         if len(parts) < 2:
-            return {"error": "Invalid format. Use: owner/repo"}
+            return ToolResult(
+                success=False,
+                content="Invalid format. Use: owner/repo",
+            )
 
         owner = parts[-2].split()[-1]
         repo = parts[-1].split()[0]
@@ -24,11 +28,14 @@ class GitHubAnalyzerTool(BaseTool):
         response = requests.get(url)
         data = response.json()
 
-        return {
-            "stars": data.get("stargazers_count"),
-            "forks": data.get("forks_count"),
-            "issues": data.get("open_issues_count"),
-            "description": data.get("description", ""),
-            "language": data.get("language", ""),
-            "url": data.get("html_url", ""),
-        }
+        return ToolResult(
+            success=True,
+            content=data.get("description", ""),
+            metadata={
+                "stars": data.get("stargazers_count"),
+                "forks": data.get("forks_count"),
+                "issues": data.get("open_issues_count"),
+                "language": data.get("language"),
+                "url": data.get("html_url"),
+            },
+        )

@@ -1,0 +1,15 @@
+Write Python code based on this task.
+
+Task: {task}
+
+Research result:
+{research_context}
+
+Requirements:
+- Write complete, runnable code
+- Include a print() statement for output
+- Use only standard library
+- Handle errors properly
+
+Return ONLY the Python code.
+No markdown, no explanation.

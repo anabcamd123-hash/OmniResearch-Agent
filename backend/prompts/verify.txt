@@ -1,0 +1,16 @@
+Evaluate this code result.
+
+Task: {task}
+
+Code:
+{code}
+
+Score 0-100 based on:
+- Correctness
+- Completeness
+- Relevance
+
+Format:
+Score: <number>
+Reason: <one sentence>
+Pass: yes/no
