@@ -1,30 +1,42 @@
+from typing import Any
+
+
 class ExecutionContext:
 
     def __init__(self):
 
-        self.values = {}
+        self.data = {}
 
-        self.history = []
+    def set(
+        self,
+        key: str,
+        value: Any,
+    ):
 
-    def set(self, key, value):
+        self.data[key] = value
 
-        self.values[key] = value
+    def get(
+        self,
+        key: str,
+        default=None,
+    ):
 
-        self.history.append({
-            "key": key,
-            "value": value,
-        })
+        return self.data.get(
+            key,
+            default,
+        )
 
-    def get(self, key, default=None):
+    def exists(
+        self,
+        key: str,
+    ):
 
-        return self.values.get(key, default)
+        return key in self.data
 
-    def get_all(self):
+    def dump(self):
 
-        return dict(self.values)
+        return self.data
 
     def clear(self):
 
-        self.values = {}
-
-        self.history = []
+        self.data = {}

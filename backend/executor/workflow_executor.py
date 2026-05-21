@@ -19,35 +19,25 @@ class WorkflowExecutor:
         self.dag_executor = DAGExecutor()
         self.task_repo = TaskRepository()
         self.workflow_repo = WorkflowRepository()
-        self.context = ExecutionContext()
 
     async def execute(self, task: str):
 
         workflow_id = str(uuid.uuid4())[:8]
 
-        await stream_log(
-            f"[System] Starting DAG workflow "
-            f"{workflow_id}"
-        )
+        ctx = ExecutionContext()
+        ctx.set("objective", task)
 
-        # EventBus: workflow started
         await bus.publish("workflow_started", {
             "workflow_id": workflow_id,
             "task": task,
         })
 
-        # Memory: workflow start
-        await memory.add(
-            f"[WORKFLOW START] {workflow_id} "
-            f"- {task}",
-            source="workflow",
+        await stream_log(
+            f"[System] Workflow {workflow_id} started"
         )
 
-        # Create plan (dynamic)
-        tasks = await self.planner.run(task)
-
-        # Store plan in context
-        self.context.set("plan", tasks)
+        # Plan
+        tasks = await self.planner.run(task, ctx)
 
         # DB: create workflow
         await self.workflow_repo.create_workflow(
@@ -55,7 +45,6 @@ class WorkflowExecutor:
             objective=task,
             total_tasks=len(tasks),
         )
-
         await self.workflow_repo.update_status(
             workflow_id, "running"
         )
@@ -66,14 +55,14 @@ class WorkflowExecutor:
                 task_id=(
                     f"{workflow_id}_{t.task_id}"
                 ),
-                objective=t.task_type,
+                objective=t.payload or t.task_type,
             )
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
                 "running",
             )
 
-        # Execute
+        # Execute DAG
         await self.dag_executor.execute(tasks)
 
         # DB: mark results
@@ -86,21 +75,11 @@ class WorkflowExecutor:
             await self.task_repo.save_result(
                 f"{workflow_id}_{t.task_id}",
                 str(t.status),
-                duration=getattr(
-                    t, "duration", 0
-                ) or 0,
+                duration=t.duration or 0,
             )
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
-                "completed"
-                if is_done
-                else "failed",
-            )
-
-            await memory.add(
-                f"[TASK DONE] {t.task_id} "
-                f"- {t.status}",
-                source="task",
+                "completed" if is_done else "failed",
             )
 
         # DB: complete workflow
@@ -110,14 +89,6 @@ class WorkflowExecutor:
             token_usage=0,
         )
 
-        # Memory: workflow end
-        await memory.add(
-            f"[WORKFLOW END] {workflow_id} "
-            f"completed={completed}",
-            source="workflow",
-        )
-
-        # EventBus: workflow completed
         await bus.publish("workflow_completed", {
             "workflow_id": workflow_id,
             "completed": completed,
@@ -125,8 +96,7 @@ class WorkflowExecutor:
         })
 
         await stream_log(
-            f"[System] Workflow {workflow_id} "
-            f"completed"
+            f"[System] Workflow {workflow_id} completed"
         )
 
         return {

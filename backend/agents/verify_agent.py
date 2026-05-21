@@ -2,6 +2,7 @@ import re
 import asyncio
 from backend.agents.base_agent import BaseAgent
 from backend.agents.result import AgentResult
+from backend.executor.context import ExecutionContext
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
 from backend.runtime.events import bus
@@ -12,24 +13,43 @@ llm = get_provider()
 
 class VerifyAgent(BaseAgent):
 
-    async def run(self, result):
+    async def run(
+        self,
+        task: str,
+        context: ExecutionContext,
+    ):
 
         state.agent_status["verify"] = "running"
         state.timeline.append({
-            "agent": "Verify", "event": "started",
+            "agent": "Verify",
+            "event": "started",
         })
 
         await bus.publish("agent_started", {
-            "agent": "verify", "task": "evaluating",
+            "agent": "verify",
+            "task": "evaluating",
         })
 
-        logger.info("[VerifyAgent] Evaluating...")
+        logger.info(
+            "[VerifyAgent] Evaluating..."
+        )
+
+        # Read coding context
+        coding_result = context.get("coding", "")
+        execution = context.get(
+            "coding_execution", {}
+        )
 
         prompt = f"""
-Evaluate this result quality.
+Evaluate this code result.
 
-Result:
-{result}
+Task: {task}
+
+Code:
+{coding_result}
+
+Execution:
+{execution}
 
 Score 0-100 based on:
 - Correctness
@@ -63,20 +83,25 @@ Pass: yes/no
             f"{'PASS' if passed else 'FAIL'}"
         )
 
-        state.agent_status["verify"] = "completed"
-        state.timeline.append({
-            "agent": "Verify", "event": "completed",
-        })
-
-        agent_result = AgentResult(
+        result = AgentResult(
             success=passed,
             content=evaluation.strip(),
             score=score / 100,
         )
 
-        await bus.publish("agent_completed", {
-            "agent": "verify",
-            "result": agent_result.to_dict(),
+        # Save to context
+        context.set("verify", result.content)
+        context.set("verify_score", score)
+
+        state.agent_status["verify"] = "completed"
+        state.timeline.append({
+            "agent": "Verify",
+            "event": "completed",
         })
 
-        return agent_result
+        await bus.publish("agent_completed", {
+            "agent": "verify",
+            "result": result.to_dict(),
+        })
+
+        return result

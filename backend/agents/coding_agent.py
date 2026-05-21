@@ -1,6 +1,7 @@
 import asyncio
 from backend.agents.base_agent import BaseAgent
 from backend.agents.result import AgentResult
+from backend.executor.context import ExecutionContext
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
 from backend.runtime.events import bus
@@ -13,30 +14,39 @@ llm = get_provider()
 
 class CodingAgent(BaseAgent):
 
-    async def run(self, task_desc):
+    async def run(
+        self,
+        task: str,
+        context: ExecutionContext,
+    ):
 
         state.agent_status["coding"] = "running"
         state.timeline.append({
-            "agent": "Coding", "event": "started",
+            "agent": "Coding",
+            "event": "started",
         })
 
         await bus.publish("agent_started", {
-            "agent": "coding", "task": str(task_desc)[:50],
+            "agent": "coding",
+            "task": task[:50],
         })
 
-        logger.info("[CodingAgent] Generating code...")
+        logger.info(
+            "[CodingAgent] Generating code..."
+        )
 
-        if isinstance(task_desc, dict):
-            desc = task_desc.get(
-                "summary", str(task_desc)
-            )
-        else:
-            desc = str(task_desc)
+        # Read research context
+        research_context = context.get(
+            "research", ""
+        )
 
         prompt = f"""
 Write Python code based on this task.
 
-Task: {desc}
+Task: {task}
+
+Research result:
+{research_context}
 
 Requirements:
 - Write complete, runnable code
@@ -67,19 +77,24 @@ No markdown, no explanation.
             f"{execution['stdout'].strip()}"
         )
 
-        state.agent_status["coding"] = "completed"
-        state.timeline.append({
-            "agent": "Coding", "event": "completed",
-        })
-
         result = AgentResult(
             success=execution.get("success", False),
             content=code,
             metadata={"execution": execution},
         )
 
+        # Save to context for next agent
+        context.set("coding", result.content)
+
+        state.agent_status["coding"] = "completed"
+        state.timeline.append({
+            "agent": "Coding",
+            "event": "completed",
+        })
+
         await bus.publish("agent_completed", {
-            "agent": "coding", "result": result.to_dict(),
+            "agent": "coding",
+            "result": result.to_dict(),
         })
 
         return result

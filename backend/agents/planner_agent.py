@@ -2,8 +2,10 @@ import json
 import asyncio
 from backend.agents.base_agent import BaseAgent
 from backend.executor.task import Task
+from backend.executor.context import ExecutionContext
 from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
+from backend.runtime.events import bus
 from backend.rag.rag_service import rag_service
 from backend.llm.provider_factory import get_provider
 
@@ -32,13 +34,21 @@ def build_mermaid(tasks):
 
 class PlannerAgent(BaseAgent):
 
-    async def run(self, task: str):
+    async def run(
+        self,
+        task: str,
+        context: ExecutionContext = None,
+    ):
 
         state.agent_status["planner"] = "running"
-
         state.timeline.append({
             "agent": "Planner",
-            "event": "started"
+            "event": "started",
+        })
+
+        await bus.publish("agent_started", {
+            "agent": "planner",
+            "task": task,
         })
 
         await stream_log(
@@ -57,7 +67,7 @@ class PlannerAgent(BaseAgent):
                 + "\n---\n".join(rag_context)
             )
 
-        # LLM dynamic plan generation
+        # LLM dynamic plan
         prompt = f"""
 You are a workflow planner.
 
@@ -66,21 +76,14 @@ You are a workflow planner.
 Task: {task}
 
 Available agent types:
-- research: Search, analyze, gather information
+- research: Search, analyze, gather info
 - coding: Generate and execute code
 - verify: Evaluate result quality
 - reflection: Analyze and suggest improvements
 
 Return a JSON array of steps.
-Each step: {{"task": "<description>", "agent": "<agent_type>"}}
-Use 2-5 steps. Match agents to task needs.
-
-Example for "Analyze PDF":
-[
-  {{"task": "Parse and extract PDF content", "agent": "research"}},
-  {{"task": "Summarize key findings", "agent": "research"}},
-  {{"task": "Verify completeness", "agent": "verify"}}
-]
+Each step: {{"task": "<desc>", "agent": "<type>"}}
+Use 2-5 steps.
 
 Return ONLY the JSON array.
 """
@@ -93,10 +96,9 @@ Return ONLY the JSON array.
             f"[Planner] LLM plan:\n{plan_text}"
         )
 
-        # Parse JSON plan
         steps = self._parse_plan(plan_text)
 
-        # Build tasks from steps
+        # Build tasks
         tasks = []
 
         for i, step in enumerate(steps):
@@ -104,20 +106,17 @@ Return ONLY the JSON array.
             if i > 0:
                 deps = [tasks[i - 1].task_id]
 
-            task_id = (
-                f"step_{i}_"
-                f"{step['agent']}"
-            )
+            task_id = f"step_{i}_{step['agent']}"
 
             tasks.append(
                 Task(
                     task_id=task_id,
                     task_type=step["agent"],
                     dependencies=deps,
+                    payload=step.get("task", ""),
                 )
             )
 
-        # Auto-generate Mermaid DAG
         state.current_dag = build_mermaid(tasks)
 
         await stream_log(
@@ -125,50 +124,35 @@ Return ONLY the JSON array.
             f"{len(tasks)} tasks"
         )
 
-        state.agent_status["planner"] = (
-            "completed"
-        )
-
+        state.agent_status["planner"] = "completed"
         state.timeline.append({
             "agent": "Planner",
-            "event": "completed"
+            "event": "completed",
+        })
+
+        await bus.publish("agent_completed", {
+            "agent": "planner",
+            "result": {"tasks": len(tasks)},
         })
 
         return tasks
 
     def _parse_plan(self, plan_text: str):
 
-        # Try JSON parse
         try:
-            # Extract JSON from text
             text = plan_text.strip()
             if text.startswith("```"):
                 lines = text.split("\n")
                 text = "\n".join(lines[1:-1])
-
             steps = json.loads(text)
-
             if isinstance(steps, list):
                 return steps[:5]
         except json.JSONDecodeError:
             pass
 
-        # Fallback: fixed plan
         return [
-            {
-                "task": "Research and gather info",
-                "agent": "research"
-            },
-            {
-                "task": "Generate code",
-                "agent": "coding"
-            },
-            {
-                "task": "Verify result",
-                "agent": "verify"
-            },
-            {
-                "task": "Reflect and improve",
-                "agent": "reflection"
-            },
+            {"task": "Research", "agent": "research"},
+            {"task": "Generate code", "agent": "coding"},
+            {"task": "Verify", "agent": "verify"},
+            {"task": "Reflect", "agent": "reflection"},
         ]

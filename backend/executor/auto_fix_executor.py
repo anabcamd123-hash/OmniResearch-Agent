@@ -1,5 +1,6 @@
 from backend.agents.registry import registry
 from backend.agents.reflection_agent import ReflectionAgent
+from backend.executor.context import ExecutionContext
 from backend.utils.logger import stream_log
 from backend.runtime.events import bus
 
@@ -13,7 +14,11 @@ class AutoFixExecutor:
         self.verifier = registry.get("verify")
         self.reflector = ReflectionAgent()
 
-    async def run(self, objective: str):
+    async def run(
+        self,
+        objective: str,
+        context: ExecutionContext,
+    ):
 
         await stream_log(
             f"[AutoFix] Starting: "
@@ -21,7 +26,7 @@ class AutoFixExecutor:
         )
 
         code_result = await self.coder.run(
-            objective
+            objective, context
         )
 
         retry = 0
@@ -29,7 +34,7 @@ class AutoFixExecutor:
         while retry < self.MAX_RETRY:
 
             verify_result = await self.verifier.run(
-                code_result
+                objective, context
             )
 
             if verify_result.success:
@@ -45,22 +50,14 @@ class AutoFixExecutor:
             )
 
             reflection = await self.reflector.run(
-                objective, str(code_result.to_dict())
+                objective, context
             )
 
+            if reflection.success:
+                return code_result
+
             code_result = await self.coder.run(
-                f"""
-Objective:
-{objective}
-
-Previous code:
-{code_result.content}
-
-Fix based on feedback:
-{reflection.content}
-
-{verify_result.content}
-"""
+                objective, context
             )
 
             await bus.publish("autofix_retry", {
