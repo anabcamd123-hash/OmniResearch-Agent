@@ -59,7 +59,11 @@ class WorkflowExecutor:
                 "running",
             )
 
-        await self.dag_executor.execute(tasks)
+        # Pass workflow_id to dag_executor
+        await self.dag_executor.execute(
+            tasks,
+            workflow_id=workflow_id,
+        )
 
         completed = 0
         for t in tasks:
