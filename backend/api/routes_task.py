@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from backend.agents.workflow_executor import WorkflowExecutor
+from backend.executor.workflow_executor import WorkflowExecutor
 
 router = APIRouter()
 

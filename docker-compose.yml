@@ -1,0 +1,14 @@
+version: '3'
+services:
+  backend:
+    build: ./backend
+    ports:
+      - '8000:8000'
+    depends_on:
+      - redis
+  frontend:
+    build: ./frontend
+    ports:
+      - '5500:5500'
+  redis:
+    image: redis
