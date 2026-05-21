@@ -1,6 +1,9 @@
 import time
 import asyncio
 from backend.executor.task_graph import TaskGraph
+from backend.executor.auto_fix_executor import AutoFixExecutor
+from backend.agents.research_agent import ResearchAgent
+from backend.agents.reflection_agent import ReflectionAgent
 from backend.utils.logger import stream_log
 from backend.runtime.task_history import history
 from backend.runtime.runtime_state import state
@@ -10,6 +13,9 @@ MAX_RETRIES = 2
 class DAGExecutor:
     def __init__(self):
         self.completed_tasks = set()
+        self.auto_fix = AutoFixExecutor()
+        self.researcher = ResearchAgent()
+        self.reflector = ReflectionAgent()
 
     async def execute(self, tasks):
         graph = TaskGraph()
@@ -35,10 +41,30 @@ class DAGExecutor:
             })
 
             try:
-                # 模拟任务执行
-                await asyncio.sleep(1)
-                if task.task_id == 'verify' and retries < 1:
-                    raise Exception('Simulated failure')
+                result = None
+
+                # Use AutoFix for coding tasks
+                if task.task_type == "coding":
+                    result = await self.auto_fix.run(
+                        task.task_id
+                    )
+
+                # Research agent
+                elif task.task_type == "research":
+                    result = self.researcher.run(
+                        task.task_id
+                    )
+
+                # Reflection agent
+                elif task.task_type == "reflection":
+                    result = self.reflector.run(
+                        {"score": 0.9}
+                    )
+
+                else:
+                    # Simulate other tasks
+                    await asyncio.sleep(1)
+                    result = {"status": "done"}
 
                 task.end_time = time.time()
                 duration = task.end_time - task.start_time

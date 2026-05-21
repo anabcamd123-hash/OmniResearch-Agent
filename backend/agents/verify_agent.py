@@ -5,6 +5,26 @@ from backend.llm.provider_factory import get_provider
 llm = get_provider()
 
 
+class VerifyResult:
+
+    def __init__(
+        self,
+        passed: bool,
+        feedback: str,
+        score: float = 0,
+    ):
+        self.passed = passed
+        self.feedback = feedback
+        self.score = score
+
+    def to_dict(self):
+        return {
+            "passed": self.passed,
+            "feedback": self.feedback,
+            "score": self.score,
+        }
+
+
 class VerifyAgent:
 
     def run(self, code_result):
@@ -20,10 +40,16 @@ class VerifyAgent:
             "[VerifyAgent] Running verification..."
         )
 
-        code = code_result.get("code", "")
-        execution = code_result.get(
-            "execution", {}
-        )
+        # Handle CodingResult or dict
+        if hasattr(code_result, "code"):
+            code = code_result.code
+            execution = code_result.execution
+        else:
+            code = code_result.get("code", "")
+            execution = code_result.get(
+                "execution", {}
+            )
+
         output = execution.get("stdout", "")
         stderr = execution.get("stderr", "")
         success = execution.get("success", False)
@@ -52,6 +78,7 @@ Score 0-100 based on:
 Format:
 Score: <number>
 Reason: <one sentence>
+Pass: yes/no
 """
         )
 
@@ -68,10 +95,16 @@ Reason: <one sentence>
 
         score = min(max(score, 0), 100)
 
+        # Determine pass/fail
+        passed = success and score >= 70
+
+        feedback = evaluation.strip()
+
         log_tokens(50)
 
         logger.info(
-            f"[VerifyAgent] Score: {score}/100"
+            f"[VerifyAgent] Score: {score}/100 "
+            f"{'PASS' if passed else 'FAIL'}"
         )
 
         state.agent_status["verify"] = "completed"
@@ -81,8 +114,8 @@ Reason: <one sentence>
             "event": "completed"
         })
 
-        return {
-            "success": success,
-            "score": score / 100,
-            "evaluation": evaluation
-        }
+        return VerifyResult(
+            passed=passed,
+            feedback=feedback,
+            score=score / 100,
+        )

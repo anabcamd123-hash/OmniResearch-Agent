@@ -7,6 +7,26 @@ runtime = PythonRuntime()
 llm = get_provider()
 
 
+class CodingResult:
+
+    def __init__(
+        self,
+        code,
+        language="python",
+        execution=None,
+    ):
+        self.code = code
+        self.language = language
+        self.execution = execution or {}
+
+    def to_dict(self):
+        return {
+            "code": self.code,
+            "language": self.language,
+            "execution": self.execution,
+        }
+
+
 class CodingAgent:
 
     def run(self, research_result):
@@ -33,14 +53,15 @@ class CodingAgent:
 
         # LLM generates code
         prompt = f"""
-Write Python code based on this research.
+Write Python code based on this task.
 
-Research: {task_desc}
+Task: {task_desc}
 
 Requirements:
 - Write complete, runnable code
 - Include a print() statement for output
 - Use only standard library
+- Handle errors properly
 
 Return ONLY the Python code.
 No markdown, no explanation.
@@ -49,17 +70,7 @@ No markdown, no explanation.
         code = llm.invoke(prompt)
 
         # Clean markdown code blocks
-        if "```" in code:
-            lines = code.split("\n")
-            code_lines = []
-            in_block = False
-            for line in lines:
-                if line.strip().startswith("```"):
-                    in_block = not in_block
-                    continue
-                if in_block:
-                    code_lines.append(line)
-            code = "\n".join(code_lines)
+        code = self._clean_code(code)
 
         logger.info(
             "[CodingAgent] Executing code..."
@@ -67,51 +78,6 @@ No markdown, no explanation.
 
         # Execute code
         execution_result = runtime.execute(code)
-
-        # Auto-fix if failed
-        if not execution_result["success"]:
-            logger.info(
-                "[CodingAgent] Code failed, "
-                "attempting auto-fix..."
-            )
-
-            fixed_code = llm.invoke(
-                f"""
-Fix this Python code.
-
-Code:
-{code}
-
-Error:
-{execution_result["stderr"]}
-
-Return ONLY the fixed Python code.
-No markdown, no explanation.
-"""
-            )
-
-            # Clean markdown code blocks
-            if "```" in fixed_code:
-                lines = fixed_code.split("\n")
-                code_lines = []
-                in_block = False
-                for line in lines:
-                    if line.strip().startswith("```"):
-                        in_block = not in_block
-                        continue
-                    if in_block:
-                        code_lines.append(line)
-                fixed_code = "\n".join(code_lines)
-
-            code = fixed_code
-            execution_result = (
-                runtime.execute(code)
-            )
-
-            logger.info(
-                f"[CodingAgent] Auto-fix result: "
-                f"{'success' if execution_result['success'] else 'failed'}"
-            )
 
         log_tokens(250)
 
@@ -127,7 +93,23 @@ No markdown, no explanation.
             "event": "completed"
         })
 
-        return {
-            "code": code,
-            "execution": execution_result
-        }
+        return CodingResult(
+            code=code,
+            execution=execution_result,
+        )
+
+    def _clean_code(self, code):
+
+        if "```" in code:
+            lines = code.split("\n")
+            code_lines = []
+            in_block = False
+            for line in lines:
+                if line.strip().startswith("```"):
+                    in_block = not in_block
+                    continue
+                if in_block:
+                    code_lines.append(line)
+            code = "\n".join(code_lines)
+
+        return code

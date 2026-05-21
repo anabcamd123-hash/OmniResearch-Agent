@@ -21,7 +21,15 @@ class ReflectionAgent:
             "Evaluating workflow..."
         )
 
-        score = verify_result.get("score", 0)
+        # Handle VerifyResult or dict
+        if hasattr(verify_result, "score"):
+            score = verify_result.score
+            feedback = verify_result.feedback
+        else:
+            score = verify_result.get("score", 0)
+            feedback = verify_result.get(
+                "evaluation", "N/A"
+            )
 
         # LLM reflection
         reflection = llm.invoke(
@@ -31,7 +39,7 @@ Analyze this workflow execution.
 Verification Score: {score}
 
 Details:
-{verify_result.get("evaluation", "N/A")}
+{feedback}
 
 Provide:
 1. What went well
@@ -46,30 +54,6 @@ Be concise, use bullet points.
             f"[ReflectionAgent] {reflection}"
         )
 
-        if score < 0.85:
-
-            logger.info(
-                "[ReflectionAgent] Low score"
-            )
-
-            state.agent_status["reflection"] = (
-                "completed"
-            )
-
-            state.timeline.append({
-                "agent": "Reflection",
-                "event": "completed"
-            })
-
-            return {
-                "reflection": reflection,
-                "verdict": "needs_retry"
-            }
-
-        logger.info(
-            "[ReflectionAgent] Task successful"
-        )
-
         state.agent_status["reflection"] = (
             "completed"
         )
@@ -82,4 +66,6 @@ Be concise, use bullet points.
         return {
             "reflection": reflection,
             "verdict": "success"
+            if score >= 0.85
+            else "needs_retry",
         }

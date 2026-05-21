@@ -87,6 +87,27 @@ class TaskRepository:
 
             return result.scalar_one_or_none()
 
+    async def update_retry(
+        self,
+        task_id: str,
+        count: int,
+    ):
+
+        async with AsyncSessionLocal() as db:
+
+            stmt = select(TaskRecord).where(
+                TaskRecord.task_id == task_id
+            )
+
+            result = await db.execute(stmt)
+
+            task = result.scalar_one_or_none()
+
+            if task:
+                task.retry_count = count
+
+                await db.commit()
+
     async def list_tasks(
         self, limit=50
     ):

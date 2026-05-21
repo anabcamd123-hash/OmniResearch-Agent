@@ -14,5 +14,13 @@ async def dashboard():
         "token_usage": state.token_usage,
         "agents": state.agent_status,
         "dag": state.current_dag,
-        "timeline": state.timeline
+        "timeline": state.timeline,
+        "auto_fix": state.auto_fix_stats,
     }
+
+
+@router.get("/autofix/stats")
+
+async def autofix_stats():
+
+    return state.auto_fix_stats

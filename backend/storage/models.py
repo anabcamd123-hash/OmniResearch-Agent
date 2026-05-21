@@ -34,6 +34,10 @@ class TaskRecord(Base):
 
     duration = Column(Float, nullable=True)
 
+    retry_count = Column(
+        Integer, default=0
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow

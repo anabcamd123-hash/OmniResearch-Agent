@@ -22,4 +22,10 @@ class RuntimeState:
             "reflection": "idle"
         }
 
+        self.auto_fix_stats = {
+            "success": 0,
+            "failed": 0,
+            "total_retry": 0,
+        }
+
 state = RuntimeState()
