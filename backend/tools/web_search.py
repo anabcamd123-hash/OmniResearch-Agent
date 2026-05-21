@@ -1,27 +1,29 @@
 from duckduckgo_search import DDGS
+from backend.tools.base import BaseTool
 
 
-class WebSearch:
+class WebSearchTool(BaseTool):
 
-    def search(
-        self,
-        query
-    ):
+    name = "web"
+    description = "Search the web using DuckDuckGo"
+
+    async def run(self, input: str):
 
         with DDGS() as ddgs:
-
             results = list(
                 ddgs.text(
-                    query,
+                    input,
                     max_results=5
                 )
             )
 
-            return [
+        return {
+            "results": [
                 {
                     "title": r.get("title", ""),
                     "url": r.get("href", ""),
-                    "snippet": r.get("body", "")
+                    "snippet": r.get("body", ""),
                 }
                 for r in results
             ]
+        }

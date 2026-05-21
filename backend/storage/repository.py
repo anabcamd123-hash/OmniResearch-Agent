@@ -308,6 +308,7 @@ class MemoryRepository:
         self,
         content: str,
         source: str = "agent",
+        memory_type: str = "general",
     ):
 
         async with AsyncSessionLocal() as db:
@@ -315,6 +316,7 @@ class MemoryRepository:
             record = MemoryRecord(
                 content=content,
                 source=source,
+                memory_type=memory_type,
             )
 
             db.add(record)
@@ -342,6 +344,38 @@ class MemoryRepository:
                 {
                     "content": r.content,
                     "source": r.source,
+                    "memory_type": r.memory_type,
+                    "time": str(r.created_at),
+                }
+                for r in rows
+            ]
+
+    async def get_learning_memories(
+        self,
+        limit: int = 1000,
+    ):
+
+        async with AsyncSessionLocal() as db:
+
+            result = await db.execute(
+                select(MemoryRecord)
+                .where(
+                    MemoryRecord.memory_type.in_(
+                        ["success", "failure"]
+                    )
+                )
+                .order_by(
+                    MemoryRecord.id.desc()
+                )
+                .limit(limit)
+            )
+
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "content": r.content,
+                    "memory_type": r.memory_type,
                     "time": str(r.created_at),
                 }
                 for r in rows

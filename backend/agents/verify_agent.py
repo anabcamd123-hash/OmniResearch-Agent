@@ -1,5 +1,8 @@
-from backend.utils.logger import logger, log_tokens
+from backend.tools.router import tool_router
+from backend.agents.reflection_agent import ReflectionAgent
+from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
+from backend.utils.logger import logger, log_tokens
 from backend.llm.provider_factory import get_provider
 
 llm = get_provider()
@@ -10,77 +13,54 @@ class VerifyResult:
     def __init__(
         self,
         passed: bool,
+        score: float,
         feedback: str,
-        score: float = 0,
     ):
         self.passed = passed
-        self.feedback = feedback
         self.score = score
+        self.feedback = feedback
 
     def to_dict(self):
         return {
             "passed": self.passed,
-            "feedback": self.feedback,
             "score": self.score,
+            "feedback": self.feedback,
         }
 
 
 class VerifyAgent:
 
-    def run(self, code_result):
+    def run(self, result):
 
         state.agent_status["verify"] = "running"
 
         state.timeline.append({
             "agent": "Verify",
-            "event": "started"
+            "event": "started",
         })
 
         logger.info(
-            "[VerifyAgent] Running verification..."
+            "[VerifyAgent] Evaluating result..."
         )
 
-        # Handle CodingResult or dict
-        if hasattr(code_result, "code"):
-            code = code_result.code
-            execution = code_result.execution
-        else:
-            code = code_result.get("code", "")
-            execution = code_result.get(
-                "execution", {}
-            )
+        prompt = f"""
+Evaluate this result quality.
 
-        output = execution.get("stdout", "")
-        stderr = execution.get("stderr", "")
-        success = execution.get("success", False)
-
-        # LLM evaluation
-        evaluation = llm.invoke(
-            f"""
-Evaluate this code execution result.
-
-Code:
-{code}
-
-Output:
-{output}
-
-Errors:
-{stderr}
-
-Execution Success: {success}
+Result:
+{result}
 
 Score 0-100 based on:
-- Code correctness
-- Output validity
-- Error handling
+- Correctness
+- Completeness
+- Relevance
 
 Format:
 Score: <number>
 Reason: <one sentence>
 Pass: yes/no
 """
-        )
+
+        evaluation = llm.invoke(prompt)
 
         # Parse score
         score = 75
@@ -95,10 +75,7 @@ Pass: yes/no
 
         score = min(max(score, 0), 100)
 
-        # Determine pass/fail
-        passed = success and score >= 70
-
-        feedback = evaluation.strip()
+        passed = score >= 70
 
         log_tokens(50)
 
@@ -111,11 +88,11 @@ Pass: yes/no
 
         state.timeline.append({
             "agent": "Verify",
-            "event": "completed"
+            "event": "completed",
         })
 
         return VerifyResult(
             passed=passed,
-            feedback=feedback,
             score=score / 100,
+            feedback=evaluation.strip(),
         )

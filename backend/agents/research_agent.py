@@ -1,15 +1,10 @@
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
-from backend.tools.web_search import WebSearch
-from backend.tools.github_analyzer import GithubAnalyzer
-from backend.tools.tool_router import ToolRouter
+from backend.tools.router import tool_router
 from backend.rag.rag_service import rag_service
 from backend.memory.memory_store import memory
 from backend.llm.provider_factory import get_provider
 
-web_search = WebSearch()
-github = GithubAnalyzer()
-router = ToolRouter()
 llm = get_provider()
 
 
@@ -21,27 +16,18 @@ class ResearchAgent:
 
         state.timeline.append({
             "agent": "Research",
-            "event": "started"
+            "event": "started",
         })
 
         logger.info(
             "[ResearchAgent] Analyzing task..."
         )
 
-        # Tool Router selects tool
-        tool = router.select(task)
+        # Use tool router to execute
+        tool_result = await tool_router.execute(task)
 
-        logger.info(
-            f"[ResearchAgent] Tool selected: {tool}"
-        )
-
-        sources_text = ""
-        github_text = ""
+        # Get RAG context
         rag_context = ""
-        search_results = []
-        github_data = None
-
-        # === Always RAG from memory ===
         try:
             rag_results = await rag_service.query(
                 task, top_k=3
@@ -51,82 +37,20 @@ class ResearchAgent:
                     "Historical context:\n"
                     + "\n---\n".join(rag_results)
                 )
-                logger.info(
-                    f"[ResearchAgent] "
-                    f"RAG: {len(rag_results)} chunks"
-                )
-        except Exception as e:
-            logger.info(
-                f"[ResearchAgent] RAG error: {e}"
-            )
+        except Exception:
+            pass
 
-        # === GitHub ===
-        if tool == "github":
-            parts = task.split("/")
-            if len(parts) >= 2:
-                owner = parts[-2].split()[-1]
-                repo = parts[-1].split()[0]
-                github_data = (
-                    github.analyze_repo(
-                        owner, repo
-                    )
-                )
-                github_text = f"""
-GitHub: {github_data.get('url')}
-Stars: {github_data.get('stars')}
-Forks: {github_data.get('forks')}
-Description: {github_data.get('description')}
-"""
-                logger.info(
-                    f"[ResearchAgent] GitHub: "
-                    f"{owner}/{repo} "
-                    f"stars="
-                    f"{github_data.get('stars')}"
-                )
-
-        # === PDF RAG ===
-        if tool == "pdf":
-            try:
-                pdf_results = await rag_service.query(
-                    task, top_k=5
-                )
-                if pdf_results:
-                    rag_context = (
-                        "Document Context:\n"
-                        + "\n---\n".join(
-                            pdf_results
-                        )
-                    )
-            except Exception:
-                pass
-
-        # === Web Search ===
-        if tool == "web" or (
-            not github_text
-            and not search_results
-        ):
-            search_results = (
-                web_search.search(task)
-            )
-            sources_text = "\n".join([
-                f"- {s['title']}: {s['snippet']}"
-                for s in search_results[:3]
-            ])
-            logger.info(
-                f"[ResearchAgent] Web: "
-                f"{len(search_results)} sources"
-            )
-
-        # LLM Summary with context
+        # LLM summarize
         summary = llm.invoke(
             f"""
 Summarize the following research results.
 
 Task: {task}
 
+Tool Result:
+{tool_result}
+
 {rag_context if rag_context else ""}
-{f"Sources:\n{sources_text}" if sources_text else ""}
-{github_text if github_text else ""}
 
 Provide a concise summary (2-3 sentences).
 """
@@ -134,13 +58,7 @@ Provide a concise summary (2-3 sentences).
 
         result = {
             "summary": summary,
-            "tool_used": tool,
-            "sources": [
-                s["url"]
-                for s in search_results[:3]
-            ],
-            "search_results": search_results,
-            "github": github_data,
+            "tool_result": tool_result,
             "rag_context": rag_context,
         }
 

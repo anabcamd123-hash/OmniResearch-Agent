@@ -14,11 +14,14 @@ class RAGService:
     async def build_index(self):
 
         logger.info(
-            "[RAG] Building index from memory..."
+            "[RAG] Building index from "
+            "learning memories..."
         )
 
-        memories = await self.memory_repo.get_recent(
-            limit=1000
+        memories = (
+            await self.memory_repo.get_learning_memories(
+                limit=2000
+            )
         )
 
         count = 0
@@ -33,7 +36,8 @@ class RAGService:
                 count += 1
 
         logger.info(
-            f"[RAG] Index built: {count} documents"
+            f"[RAG] Index built: "
+            f"{count} learning memories"
         )
 
     async def query(

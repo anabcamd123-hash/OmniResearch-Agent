@@ -134,6 +134,14 @@ class MemoryRecord(Base):
         Text, default="agent"
     )
 
+    memory_type = Column(
+        Text, default="general"
+    )
+
+    embedding_ready = Column(
+        Integer, default=0
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow
