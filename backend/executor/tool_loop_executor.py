@@ -2,12 +2,8 @@ from backend.agents.registry import registry
 from backend.agents.reflection_agent import ReflectionAgent
 from backend.executor.context import ExecutionContext
 from backend.runtime.event_bus import event_bus
-from backend.runtime.event_types import (
-    TASK_STARTED,
-    TASK_COMPLETED,
-    TASK_FAILED,
-    TASK_RETRY,
-)
+from backend.runtime.event_types import TASK_RETRY
+from backend.runtime.metrics import metrics
 
 
 class ToolLoopExecutor:
@@ -61,6 +57,8 @@ class ToolLoopExecutor:
                 }
 
             retry += 1
+
+            metrics.retries += 1
 
             await event_bus.publish(
                 TASK_RETRY,

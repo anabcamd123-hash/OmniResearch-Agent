@@ -1,6 +1,7 @@
 from backend.tools.registry import registry
 from backend.llm.provider_factory import get_provider
 from backend.utils.logger import logger
+from backend.runtime.metrics import metrics
 
 
 class ToolRouter:
@@ -42,7 +43,6 @@ Return ONLY the tool name (github/pdf/web/rag).
 
         tool_name = tool_name.strip().lower()
 
-        # Fallback validation
         if tool_name not in self.registry.tools:
             tool_name = "web"
 
@@ -55,7 +55,6 @@ Return ONLY the tool name (github/pdf/web/rag).
     ):
 
         if not tool_name:
-            # Query past failures first
             rag_tool = self.registry.get("rag")
             past_context = ""
             try:
@@ -74,6 +73,10 @@ Return ONLY the tool name (github/pdf/web/rag).
 
         if not tool:
             tool = self.registry.get("rag")
+
+        # Metrics: track tool usage
+        metrics.tool_calls += 1
+        metrics.tool_usage[tool_name] += 1
 
         logger.info(
             f"[ToolRouter] Selected: {tool_name}"

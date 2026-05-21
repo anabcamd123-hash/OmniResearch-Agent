@@ -1,5 +1,6 @@
 import asyncio
 from collections import defaultdict
+from backend.utils.logger import logger
 
 
 class EventBus:
@@ -24,6 +25,9 @@ class EventBus:
         payload: dict,
     ):
 
+        # Inject event type for trace
+        payload["_event_type"] = event_type
+
         callbacks = self.subscribers.get(
             event_type,
             [],
@@ -32,7 +36,6 @@ class EventBus:
         if not callbacks:
             return
 
-        # Concurrent execution
         await asyncio.gather(
             *[
                 callback(payload)

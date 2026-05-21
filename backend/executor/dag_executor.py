@@ -11,6 +11,7 @@ from backend.runtime.event_types import (
     TASK_FAILED,
     TASK_RETRY,
 )
+from backend.runtime.agent_stats import agent_stats
 
 
 class DAGExecutor:
@@ -77,10 +78,17 @@ class DAGExecutor:
                     task.task_id
                 )
 
+                # Agent stats
+                agent_stats.record(
+                    task.task_type,
+                    task.duration,
+                )
+
                 await event_bus.publish(
                     TASK_COMPLETED,
                     {
                         "task_id": task.task_id,
+                        "task_type": task.task_type,
                         "duration": task.duration,
                     },
                 )
@@ -102,10 +110,16 @@ class DAGExecutor:
                     task.task_id
                 )
 
+                agent_stats.record(
+                    task.task_type,
+                    task.duration,
+                )
+
                 await event_bus.publish(
                     TASK_COMPLETED,
                     {
                         "task_id": task.task_id,
+                        "task_type": task.task_type,
                         "duration": task.duration,
                     },
                 )
@@ -118,6 +132,7 @@ class DAGExecutor:
                 TASK_RETRY,
                 {
                     "task_id": task.task_id,
+                    "task_type": task.task_type,
                     "retry": retry,
                     "reason": reflection.content,
                 },
@@ -132,10 +147,16 @@ class DAGExecutor:
         task.status = "failed"
         self.completed_tasks.add(task.task_id)
 
+        agent_stats.record(
+            task.task_type,
+            task.duration,
+        )
+
         await event_bus.publish(
             TASK_FAILED,
             {
                 "task_id": task.task_id,
+                "task_type": task.task_type,
                 "duration": task.duration,
             },
         )

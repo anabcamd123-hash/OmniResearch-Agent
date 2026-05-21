@@ -42,8 +42,27 @@ from backend.runtime.listeners.websocket_listener import (
     on_workflow_completed as ws_workflow_completed,
 )
 
+from backend.runtime.listeners.trace_listener import (
+    collect_trace,
+)
+
 
 def register_events():
+
+    # Trace listener (catches all events)
+    all_events = [
+        TASK_STARTED,
+        TASK_COMPLETED,
+        TASK_FAILED,
+        TASK_RETRY,
+        AGENT_STARTED,
+        AGENT_COMPLETED,
+        WORKFLOW_STARTED,
+        WORKFLOW_COMPLETED,
+    ]
+
+    for event in all_events:
+        event_bus.subscribe(event, collect_trace)
 
     # Logger listener
     event_bus.subscribe(TASK_STARTED, log_task_started)

@@ -11,6 +11,8 @@ from backend.api.routes_history import router as history_router
 from backend.api.routes_db import router as db_router
 from backend.api.routes_upload import router as upload_router
 from backend.api.routes_memory import router as memory_router
+from backend.api.routes_trace import router as trace_router
+from backend.api.routes_metrics import router as metrics_router
 from backend.storage.init_db import init_db
 from backend.rag.rag_service import rag_service
 from backend.runtime.register_events import register_events
@@ -32,6 +34,8 @@ app.include_router(history_router)
 app.include_router(db_router)
 app.include_router(upload_router)
 app.include_router(memory_router)
+app.include_router(trace_router)
+app.include_router(metrics_router)
 
 
 @app.on_event("startup")
