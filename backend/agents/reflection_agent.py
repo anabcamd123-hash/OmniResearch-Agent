@@ -1,48 +1,31 @@
 import asyncio
 from backend.agents.base_agent import BaseAgent
+from backend.agents.result import AgentResult
 from backend.utils.logger import logger
 from backend.runtime.runtime_state import state
+from backend.runtime.events import bus
 from backend.storage.repository import MemoryRepository
 from backend.llm.provider_factory import get_provider
-
-
-class ReflectionResult:
-
-    def __init__(
-        self,
-        need_retry: bool,
-        reason: str,
-    ):
-        self.need_retry = need_retry
-        self.reason = reason
-
-    def to_dict(self):
-        return {
-            "need_retry": self.need_retry,
-            "reason": self.reason,
-        }
 
 
 class ReflectionAgent(BaseAgent):
 
     def __init__(self):
-
         self.llm = get_provider()
-
         self.memory_repo = MemoryRepository()
 
     async def run(self, task: str, result):
 
         state.agent_status["reflection"] = "running"
-
         state.timeline.append({
-            "agent": "Reflection",
-            "event": "started",
+            "agent": "Reflection", "event": "started",
         })
 
-        logger.info(
-            "[ReflectionAgent] Evaluating..."
-        )
+        await bus.publish("agent_started", {
+            "agent": "reflection", "task": task[:50],
+        })
+
+        logger.info("[ReflectionAgent] Evaluating...")
 
         prompt = f"""
 You are a reflection system.
@@ -68,58 +51,51 @@ reason: <one sentence explanation>
         )
 
         need_retry = "true" in output.lower()
+        reason = output.strip()
 
-        reflection = ReflectionResult(
-            need_retry=need_retry,
-            reason=output.strip(),
-        )
-
-        # Save learning memory (summarized)
         await self.save_learning(
-            task, result, reflection
+            task, reason, need_retry
         )
 
         logger.info(
-            f"[ReflectionAgent] "
-            f"retry={need_retry}"
+            f"[ReflectionAgent] retry={need_retry}"
         )
 
-        state.agent_status["reflection"] = (
-            "completed"
-        )
-
+        state.agent_status["reflection"] = "completed"
         state.timeline.append({
-            "agent": "Reflection",
-            "event": "completed",
+            "agent": "Reflection", "event": "completed",
         })
 
-        return reflection
+        agent_result = AgentResult(
+            success=not need_retry,
+            content=reason,
+            metadata={"need_retry": need_retry},
+        )
+
+        await bus.publish("agent_completed", {
+            "agent": "reflection",
+            "result": agent_result.to_dict(),
+        })
+
+        return agent_result
 
     async def save_learning(
-        self,
-        task,
-        result,
-        reflection: ReflectionResult,
+        self, task, reason, need_retry
     ):
 
         memory_type = (
-            "success"
-            if not reflection.need_retry
-            else "failure"
+            "success" if not need_retry else "failure"
         )
 
-        # Summarize into concise knowledge
         summary_prompt = f"""
 Summarize this experience into one sentence
 of actionable knowledge.
 
 Task: {task}
-Feedback: {reflection.reason}
-Outcome: {"success" if not reflection.need_retry else "failure"}
+Feedback: {reason}
+Outcome: {memory_type}
 
 Return one sentence of knowledge.
-Example: "When generating Python code,
-always include error handling for file IO."
 """
 
         knowledge = await asyncio.to_thread(

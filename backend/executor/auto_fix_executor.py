@@ -1,7 +1,7 @@
-from backend.agents.coding_agent import CodingAgent
-from backend.agents.verify_agent import VerifyAgent
+from backend.agents.registry import registry
 from backend.agents.reflection_agent import ReflectionAgent
 from backend.utils.logger import stream_log
+from backend.runtime.events import bus
 
 
 class AutoFixExecutor:
@@ -9,56 +9,65 @@ class AutoFixExecutor:
     MAX_RETRY = 3
 
     def __init__(self):
-        self.coder = CodingAgent()
-        self.verifier = VerifyAgent()
+        self.coder = registry.get("coding")
+        self.verifier = registry.get("verify")
         self.reflector = ReflectionAgent()
 
     async def run(self, objective: str):
 
         await stream_log(
-            f"[AutoFix] Starting for: "
+            f"[AutoFix] Starting: "
             f"{objective[:50]}..."
         )
 
-        code = await self.coder.run(objective)
+        code_result = await self.coder.run(
+            objective
+        )
 
         retry = 0
 
         while retry < self.MAX_RETRY:
 
-            verify = await self.verifier.run(code)
+            verify_result = await self.verifier.run(
+                code_result
+            )
 
-            if verify.passed:
+            if verify_result.success:
                 await stream_log(
-                    f"[AutoFix] success after "
+                    f"[AutoFix] Success after "
                     f"{retry} retries"
                 )
-
-                return code
+                return code_result
 
             await stream_log(
-                f"[AutoFix] verify failed, "
-                f"retry {retry + 1}"
+                f"[AutoFix] Failed, retry "
+                f"{retry + 1}"
             )
 
             reflection = await self.reflector.run(
-                str(code.to_dict()), code
+                objective, str(code_result.to_dict())
             )
 
-            code = await self.coder.run(
+            code_result = await self.coder.run(
                 f"""
 Objective:
 {objective}
 
 Previous code:
-{code.code}
+{code_result.content}
 
 Fix based on feedback:
-{reflection.reason}
+{reflection.content}
 
-{verify.feedback}
+{verify_result.content}
 """
             )
+
+            await bus.publish("autofix_retry", {
+                "objective": objective,
+                "retry": retry + 1,
+                "reason": reflection.content,
+            })
 
             retry += 1
 

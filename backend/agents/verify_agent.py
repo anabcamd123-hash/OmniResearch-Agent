@@ -1,31 +1,13 @@
 import re
 import asyncio
 from backend.agents.base_agent import BaseAgent
+from backend.agents.result import AgentResult
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
+from backend.runtime.events import bus
 from backend.llm.provider_factory import get_provider
 
 llm = get_provider()
-
-
-class VerifyResult:
-
-    def __init__(
-        self,
-        passed: bool,
-        score: float,
-        feedback: str,
-    ):
-        self.passed = passed
-        self.score = score
-        self.feedback = feedback
-
-    def to_dict(self):
-        return {
-            "passed": self.passed,
-            "score": self.score,
-            "feedback": self.feedback,
-        }
 
 
 class VerifyAgent(BaseAgent):
@@ -33,15 +15,15 @@ class VerifyAgent(BaseAgent):
     async def run(self, result):
 
         state.agent_status["verify"] = "running"
-
         state.timeline.append({
-            "agent": "Verify",
-            "event": "started",
+            "agent": "Verify", "event": "started",
         })
 
-        logger.info(
-            "[VerifyAgent] Evaluating result..."
-        )
+        await bus.publish("agent_started", {
+            "agent": "verify", "task": "evaluating",
+        })
+
+        logger.info("[VerifyAgent] Evaluating...")
 
         prompt = f"""
 Evaluate this result quality.
@@ -64,7 +46,6 @@ Pass: yes/no
             llm.invoke, prompt
         )
 
-        # Parse score with regex (robust)
         score = 75
         match = re.search(
             r"score[:\s]*(\d+)",
@@ -74,9 +55,7 @@ Pass: yes/no
             score = int(match.group(1))
 
         score = min(max(score, 0), 100)
-
         passed = score >= 70
-
         log_tokens(50)
 
         logger.info(
@@ -85,14 +64,19 @@ Pass: yes/no
         )
 
         state.agent_status["verify"] = "completed"
-
         state.timeline.append({
-            "agent": "Verify",
-            "event": "completed",
+            "agent": "Verify", "event": "completed",
         })
 
-        return VerifyResult(
-            passed=passed,
+        agent_result = AgentResult(
+            success=passed,
+            content=evaluation.strip(),
             score=score / 100,
-            feedback=evaluation.strip(),
         )
+
+        await bus.publish("agent_completed", {
+            "agent": "verify",
+            "result": agent_result.to_dict(),
+        })
+
+        return agent_result

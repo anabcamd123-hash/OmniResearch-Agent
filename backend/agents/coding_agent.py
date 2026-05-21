@@ -1,7 +1,9 @@
 import asyncio
 from backend.agents.base_agent import BaseAgent
+from backend.agents.result import AgentResult
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
+from backend.runtime.events import bus
 from backend.tools.python_runtime import PythonRuntime
 from backend.llm.provider_factory import get_provider
 
@@ -9,55 +11,32 @@ runtime = PythonRuntime()
 llm = get_provider()
 
 
-class CodingResult:
-
-    def __init__(
-        self,
-        code,
-        language="python",
-        execution=None,
-    ):
-        self.code = code
-        self.language = language
-        self.execution = execution or {}
-
-    def to_dict(self):
-        return {
-            "code": self.code,
-            "language": self.language,
-            "execution": self.execution,
-        }
-
-
 class CodingAgent(BaseAgent):
 
-    async def run(self, research_result):
+    async def run(self, task_desc):
 
         state.agent_status["coding"] = "running"
-
         state.timeline.append({
-            "agent": "Coding",
-            "event": "started"
+            "agent": "Coding", "event": "started",
         })
 
-        logger.info(
-            "[CodingAgent] Generating code..."
-        )
+        await bus.publish("agent_started", {
+            "agent": "coding", "task": str(task_desc)[:50],
+        })
 
-        # Extract task info
-        task_desc = ""
-        if isinstance(research_result, dict):
-            task_desc = research_result.get(
-                "summary", str(research_result)
+        logger.info("[CodingAgent] Generating code...")
+
+        if isinstance(task_desc, dict):
+            desc = task_desc.get(
+                "summary", str(task_desc)
             )
         else:
-            task_desc = str(research_result)
+            desc = str(task_desc)
 
-        # LLM generates code (async)
         prompt = f"""
 Write Python code based on this task.
 
-Task: {task_desc}
+Task: {desc}
 
 Requirements:
 - Write complete, runnable code
@@ -73,15 +52,11 @@ No markdown, no explanation.
             llm.invoke, prompt
         )
 
-        # Clean markdown code blocks
         code = self._clean_code(code)
 
-        logger.info(
-            "[CodingAgent] Executing code..."
-        )
+        logger.info("[CodingAgent] Executing...")
 
-        # Execute code (async)
-        execution_result = await asyncio.to_thread(
+        execution = await asyncio.to_thread(
             runtime.execute, code
         )
 
@@ -89,23 +64,27 @@ No markdown, no explanation.
 
         logger.info(
             f"[CodingAgent] Output: "
-            f"{execution_result['stdout'].strip()}"
+            f"{execution['stdout'].strip()}"
         )
 
         state.agent_status["coding"] = "completed"
-
         state.timeline.append({
-            "agent": "Coding",
-            "event": "completed"
+            "agent": "Coding", "event": "completed",
         })
 
-        return CodingResult(
-            code=code,
-            execution=execution_result,
+        result = AgentResult(
+            success=execution.get("success", False),
+            content=code,
+            metadata={"execution": execution},
         )
 
-    def _clean_code(self, code):
+        await bus.publish("agent_completed", {
+            "agent": "coding", "result": result.to_dict(),
+        })
 
+        return result
+
+    def _clean_code(self, code):
         if "```" in code:
             lines = code.split("\n")
             code_lines = []
@@ -117,5 +96,4 @@ No markdown, no explanation.
                 if in_block:
                     code_lines.append(line)
             code = "\n".join(code_lines)
-
         return code

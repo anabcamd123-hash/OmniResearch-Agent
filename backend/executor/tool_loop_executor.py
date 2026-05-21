@@ -1,23 +1,32 @@
-from backend.tools.router import tool_router
+from backend.agents.registry import registry
 from backend.agents.reflection_agent import ReflectionAgent
 from backend.utils.logger import stream_log
+from backend.runtime.events import bus
 
 
 class ToolLoopExecutor:
 
     def __init__(self):
 
-        self.router = tool_router
+        self.registry = registry
 
         self.reflector = ReflectionAgent()
 
         self.max_retry = 3
 
-    async def run(self, task: str):
+    async def run(
+        self,
+        task: str,
+        agent_type: str = "research",
+        context=None,
+    ):
 
         await stream_log(
-            f"[ToolLoop] Starting: {task[:50]}"
+            f"[ToolLoop] {agent_type}: "
+            f"{task[:50]}"
         )
+
+        agent = self.registry.get(agent_type)
 
         retry = 0
 
@@ -25,42 +34,56 @@ class ToolLoopExecutor:
 
         while retry < self.max_retry:
 
-            # 1. Execute tool
-            result = await self.router.execute(task)
+            # 1. Execute agent
+            if context and agent_type != "research":
+                payload = context
+            else:
+                payload = task
+
+            result = await agent.run(payload)
 
             last_result = result
 
-            # 2. Reflect
-            reflection = await self.reflector.run(
-                task, result
-            )
-
-            # 3. Success → exit
-            if not reflection.need_retry:
-
+            # 2. Check success
+            if result.success:
                 await stream_log(
                     f"[ToolLoop] Success after "
                     f"{retry} retries"
                 )
-
                 return {
                     "result": result,
                     "retry": retry,
                     "status": "completed",
                 }
 
-            # 4. Retry with context
-            await stream_log(
-                f"[ToolLoop] Retry {retry + 1}: "
-                f"{reflection.reason[:50]}"
+            # 3. Reflect
+            reflection = await self.reflector.run(
+                task, str(result.to_dict())
             )
 
-            task = (
-                f"Original task: {task}\n"
-                f"Previous failure: "
-                f"{reflection.reason}\n"
-                f"Fix and retry."
+            # 4. Check reflection
+            if reflection.success:
+                await stream_log(
+                    f"[ToolLoop] Accepted after "
+                    f"{retry} retries"
+                )
+                return {
+                    "result": result,
+                    "retry": retry,
+                    "status": "completed",
+                }
+
+            # 5. Retry with context
+            await stream_log(
+                f"[ToolLoop] Retry {retry + 1}: "
+                f"{reflection.content[:50]}"
             )
+
+            await bus.publish("task_retry", {
+                "task": task,
+                "retry": retry + 1,
+                "reason": reflection.content,
+            })
 
             retry += 1
 

@@ -1,8 +1,10 @@
 import uuid
 from backend.agents.planner_agent import PlannerAgent
 from backend.executor.dag_executor import DAGExecutor
+from backend.executor.context import ExecutionContext
 from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
+from backend.runtime.events import bus
 from backend.memory.memory_store import memory
 from backend.storage.repository import (
     TaskRepository,
@@ -17,6 +19,7 @@ class WorkflowExecutor:
         self.dag_executor = DAGExecutor()
         self.task_repo = TaskRepository()
         self.workflow_repo = WorkflowRepository()
+        self.context = ExecutionContext()
 
     async def execute(self, task: str):
 
@@ -27,6 +30,12 @@ class WorkflowExecutor:
             f"{workflow_id}"
         )
 
+        # EventBus: workflow started
+        await bus.publish("workflow_started", {
+            "workflow_id": workflow_id,
+            "task": task,
+        })
+
         # Memory: workflow start
         await memory.add(
             f"[WORKFLOW START] {workflow_id} "
@@ -36,6 +45,9 @@ class WorkflowExecutor:
 
         # Create plan (dynamic)
         tasks = await self.planner.run(task)
+
+        # Store plan in context
+        self.context.set("plan", tasks)
 
         # DB: create workflow
         await self.workflow_repo.create_workflow(
@@ -51,7 +63,9 @@ class WorkflowExecutor:
         # DB: create tasks
         for t in tasks:
             await self.task_repo.create_task(
-                task_id=f"{workflow_id}_{t.task_id}",
+                task_id=(
+                    f"{workflow_id}_{t.task_id}"
+                ),
                 objective=t.task_type,
             )
             await self.task_repo.update_status(
@@ -78,10 +92,11 @@ class WorkflowExecutor:
             )
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
-                "completed" if is_done else "failed",
+                "completed"
+                if is_done
+                else "failed",
             )
 
-            # Memory: task done
             await memory.add(
                 f"[TASK DONE] {t.task_id} "
                 f"- {t.status}",
@@ -101,6 +116,13 @@ class WorkflowExecutor:
             f"completed={completed}",
             source="workflow",
         )
+
+        # EventBus: workflow completed
+        await bus.publish("workflow_completed", {
+            "workflow_id": workflow_id,
+            "completed": completed,
+            "total": len(tasks),
+        })
 
         await stream_log(
             f"[System] Workflow {workflow_id} "
