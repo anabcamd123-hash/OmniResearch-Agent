@@ -5,10 +5,10 @@ from backend.executor.auto_fix_executor import AutoFixExecutor
 from backend.agents.research_agent import ResearchAgent
 from backend.agents.reflection_agent import ReflectionAgent
 from backend.utils.logger import stream_log
-from backend.runtime.task_history import history
 from backend.runtime.runtime_state import state
 
 MAX_RETRIES = 2
+
 
 class DAGExecutor:
     def __init__(self):
@@ -23,73 +23,87 @@ class DAGExecutor:
             graph.add_task(task)
 
         while len(self.completed_tasks) < len(tasks):
-            ready_tasks = graph.get_ready_tasks(self.completed_tasks)
+            ready_tasks = graph.get_ready_tasks(
+                self.completed_tasks
+            )
             if not ready_tasks:
                 break
-            await asyncio.gather(*[self.run_task(task) for task in ready_tasks])
+            await asyncio.gather(
+                *[
+                    self.run_task(task)
+                    for task in ready_tasks
+                ]
+            )
 
     async def run_task(self, task):
         retries = 0
         while retries <= MAX_RETRIES:
-            task.status = 'running'
+            task.status = "running"
             task.start_time = time.time()
-            await stream_log(f'[Executor] Running task: {task.task_id}')
+            await stream_log(
+                f"[Executor] Running task: "
+                f"{task.task_id}"
+            )
 
             state.timeline.append({
                 "agent": task.task_type.capitalize(),
-                "event": "started"
+                "event": "started",
             })
 
             try:
                 result = None
 
-                # Use AutoFix for coding tasks
                 if task.task_type == "coding":
                     result = await self.auto_fix.run(
                         task.task_id
                     )
 
-                # Research agent
                 elif task.task_type == "research":
                     result = self.researcher.run(
                         task.task_id
                     )
 
-                # Reflection agent
                 elif task.task_type == "reflection":
                     result = self.reflector.run(
                         {"score": 0.9}
                     )
 
                 else:
-                    # Simulate other tasks
                     await asyncio.sleep(1)
                     result = {"status": "done"}
 
                 task.end_time = time.time()
-                duration = task.end_time - task.start_time
-                task.status = 'completed'
+                task.duration = (
+                    task.end_time - task.start_time
+                )
+                task.status = "completed"
                 self.completed_tasks.add(task.task_id)
-                await stream_log(f'[Executor] Completed task: {task.task_id}')
-
-                history.add_record(task.task_id, 'completed', duration)
+                await stream_log(
+                    f"[Executor] Completed: "
+                    f"{task.task_id}"
+                )
 
                 state.timeline.append({
                     "agent": task.task_type.capitalize(),
-                    "event": "completed"
+                    "event": "completed",
                 })
 
                 break
+
             except Exception as e:
                 task.end_time = time.time()
-                duration = task.end_time - task.start_time
+                task.duration = (
+                    task.end_time - task.start_time
+                )
                 retries += 1
-                task.status = 'pending'
-                await stream_log(f'[Executor] Task {task.task_id} failed, retry {retries}: {e}')
-
-                history.add_record(task.task_id, 'failed', duration)
+                task.status = "pending"
+                await stream_log(
+                    f"[Executor] Failed: "
+                    f"{task.task_id} retry {retries}: "
+                    f"{e}"
+                )
 
                 state.timeline.append({
                     "agent": task.task_type.capitalize(),
-                    "event": "failed"
+                    "event": "failed",
                 })

@@ -12,13 +12,9 @@ from backend.storage.repository import (
 class WorkflowExecutor:
 
     def __init__(self):
-
         self.planner = PlannerAgent()
-
         self.dag_executor = DAGExecutor()
-
         self.task_repo = TaskRepository()
-
         self.workflow_repo = WorkflowRepository()
 
     async def execute(self, task: str):
@@ -30,7 +26,7 @@ class WorkflowExecutor:
             f"{workflow_id}"
         )
 
-        # Create workflow in DB
+        # DB: create workflow
         await self.workflow_repo.create_workflow(
             workflow_id=workflow_id,
             objective=task,
@@ -44,48 +40,49 @@ class WorkflowExecutor:
         # Create plan
         tasks = await self.planner.create_plan(task)
 
-        state.total_tasks += len(tasks)
-        state.running_tasks = len(tasks)
-
-        # Create tasks in DB
+        # DB: create tasks
         for t in tasks:
             await self.task_repo.create_task(
                 task_id=f"{workflow_id}_{t.task_id}",
                 objective=t.task_id,
             )
-
-        # Execute
-        for t in tasks:
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
                 "running",
             )
 
+        # Execute
         await self.dag_executor.execute(tasks)
 
-        # Mark completed
+        # DB: mark results
+        completed = 0
         for t in tasks:
+            is_done = t.status == "completed"
+            if is_done:
+                completed += 1
+
             await self.task_repo.save_result(
                 f"{workflow_id}_{t.task_id}",
                 str(t.status),
-                duration=0,
+                duration=getattr(
+                    t, "duration", 0
+                ) or 0,
             )
             await self.task_repo.update_status(
                 f"{workflow_id}_{t.task_id}",
-                "completed" if t.status == "completed" else "failed",
+                "completed" if is_done else "failed",
             )
 
-        state.completed_tasks += len(tasks)
-        state.running_tasks = 0
-
+        # DB: complete workflow
         await self.workflow_repo.complete_workflow(
             workflow_id=workflow_id,
-            completed_tasks=len(tasks),
-            token_usage=state.token_usage,
+            completed_tasks=completed,
+            token_usage=0,
         )
 
         await stream_log(
-            f"[System] Workflow {workflow_id} completed"
+            f"[System] Workflow {workflow_id} "
+            f"completed"
         )
 
         return {
@@ -94,8 +91,8 @@ class WorkflowExecutor:
             "tasks": [
                 {
                     "task_id": t.task_id,
-                    "status": t.status
+                    "status": t.status,
                 }
                 for t in tasks
-            ]
+            ],
         }

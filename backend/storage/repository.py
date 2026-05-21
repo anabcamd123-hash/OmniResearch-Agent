@@ -246,6 +246,22 @@ class TokenRepository:
 
             await db.commit()
 
+    async def get_total(self):
+
+        async with AsyncSessionLocal() as db:
+
+            from sqlalchemy import func
+
+            stmt = select(
+                func.sum(TokenUsage.total_tokens)
+            )
+
+            result = await db.execute(stmt)
+
+            total = result.scalar()
+
+            return total or 0
+
 
 class LogRepository:
 
