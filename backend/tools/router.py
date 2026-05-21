@@ -25,19 +25,21 @@ class ToolRouter:
             for name, desc in tool_desc.items()
         ])
 
-        prompt = f"""
-You are a tool selection system.
+        context_text = ""
+        if context:
+            context_text = (
+                "Context from past experiences:\n"
+                + context
+            )
 
-Task:
-{task}
-
-{f"Context from past experiences:\n{context}" if context else ""}
-
-Available tools:
-{tools_text}
-
-Return ONLY the tool name (github/pdf/web/rag).
-"""
+        prompt = (
+            f"You are a tool selection system.\n\n"
+            f"Task:\n{task}\n\n"
+            f"{context_text}\n\n"
+            f"Available tools:\n{tools_text}\n\n"
+            f"Return ONLY the tool name "
+            f"(github/pdf/web/rag)."
+        )
 
         tool_name = self.llm.invoke(prompt)
 
@@ -60,7 +62,7 @@ Return ONLY the tool name (github/pdf/web/rag).
             try:
                 rag_result = await rag_tool.run(task)
                 past_context = str(
-                    rag_result.get("context", "")
+                    rag_result.content
                 )
             except Exception:
                 pass
@@ -74,7 +76,6 @@ Return ONLY the tool name (github/pdf/web/rag).
         if not tool:
             tool = self.registry.get("rag")
 
-        # Metrics: track tool usage
         metrics.tool_calls += 1
         metrics.tool_usage[tool_name] += 1
 

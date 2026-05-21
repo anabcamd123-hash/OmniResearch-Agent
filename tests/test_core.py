@@ -59,8 +59,6 @@ def test_memory_store():
     from backend.memory.memory_store import MemoryStore
 
     store = MemoryStore()
-
-    # MemoryStore now uses DB, test basic structure
     assert store.repo is not None
 
 
@@ -73,6 +71,12 @@ def test_prompt_loader():
 
     coding = load_prompt("coding")
     assert "Python code" in coding
+
+    verify = load_prompt("verify")
+    assert "Score" in verify
+
+    reflection = load_prompt("reflection")
+    assert "reflection system" in reflection
 
 
 def test_metrics():
@@ -113,3 +117,67 @@ def test_agent_stats():
     d = stats.to_dict()
     assert d["research"]["calls"] == 2
     assert d["research"]["avg_duration"] == 2.75
+
+
+def test_event_bus():
+
+    from collections import defaultdict
+
+    class TestEventBus:
+        def __init__(self):
+            self.subscribers = defaultdict(list)
+
+        def subscribe(self, event_type, callback):
+            self.subscribers[event_type].append(callback)
+
+        async def publish(self, event_type, payload):
+            for cb in self.subscribers.get(event_type, []):
+                await cb(payload)
+
+    bus = TestEventBus()
+    results = []
+
+    async def handler(payload):
+        results.append(payload)
+
+    bus.subscribe("test_event", handler)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(
+        bus.publish("test_event", {"data": "hello"})
+    )
+    loop.close()
+
+    assert len(results) == 1
+    assert results[0]["data"] == "hello"
+
+
+def test_mcp_registry():
+
+    from backend.mcp.models import MCPTool
+    from backend.mcp.registry import MCPRegistry
+
+    registry = MCPRegistry()
+
+    tool = MCPTool(
+        name="test_tool",
+        description="A test tool",
+        server="http://localhost:9001",
+    )
+
+    registry.register(tool)
+
+    assert registry.get("test_tool") == tool
+    assert registry.get("missing") is None
+    assert len(registry.all()) == 1
+
+
+def test_config_settings():
+
+    from backend.config.settings import settings
+
+    assert settings.MODEL_PROVIDER in [
+        "openai", "gemini", "deepseek", "ollama"
+    ]
+    assert settings.RAG_TOP_K > 0
+    assert settings.DATABASE_URL is not None
