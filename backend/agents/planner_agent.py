@@ -1,6 +1,9 @@
 from backend.executor.task import Task
 from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
+from backend.llm.provider_factory import get_provider
+
+llm = get_provider()
 
 
 class PlannerAgent:
@@ -18,31 +21,67 @@ class PlannerAgent:
             f"[Planner] Creating DAG workflow for: {task}"
         )
 
-        tasks = [
+        prompt = f"""
+Create a workflow plan for this task.
 
-            Task(
-                task_id="research",
-                task_type="research"
-            ),
+Task: {task}
 
-            Task(
-                task_id="coding",
-                task_type="coding",
-                dependencies=["research"]
-            ),
+Return ONLY a numbered list of steps.
+Each step should be concise (3-8 words).
+Use exactly 4 steps.
+Format:
+1. step one
+2. step two
+3. step three
+4. step four
+"""
 
-            Task(
-                task_id="verify",
-                task_type="verify",
-                dependencies=["coding"]
-            ),
+        plan_text = llm.invoke(prompt)
 
-            Task(
-                task_id="reflection",
-                task_type="reflection",
-                dependencies=["verify"]
-            )
+        await stream_log(
+            f"[Planner] LLM plan:\n{plan_text}"
+        )
+
+        # Parse steps from LLM response
+        steps = []
+        for line in plan_text.strip().split("\n"):
+            line = line.strip()
+            if line and line[0].isdigit():
+                # Remove number prefix
+                parts = line.split(".", 1)
+                if len(parts) > 1:
+                    steps.append(parts[1].strip())
+                else:
+                    steps.append(line)
+
+        # Ensure we have exactly 4 steps
+        while len(steps) < 4:
+            steps.append(f"Step {len(steps) + 1}")
+
+        steps = steps[:4]
+
+        task_types = [
+            "research", "coding",
+            "verify", "reflection"
         ]
+
+        tasks = []
+
+        for i, (step, task_type) in enumerate(
+            zip(steps, task_types)
+        ):
+
+            deps = []
+            if i > 0:
+                deps = [tasks[i - 1].task_id]
+
+            tasks.append(
+                Task(
+                    task_id=task_type,
+                    task_type=task_type,
+                    dependencies=deps
+                )
+            )
 
         state.current_dag = """
 graph TD
@@ -52,7 +91,8 @@ graph TD
 """
 
         await stream_log(
-            f"[Planner] DAG created with {len(tasks)} tasks"
+            f"[Planner] DAG created with "
+            f"{len(tasks)} tasks"
         )
 
         state.agent_status["planner"] = "completed"
