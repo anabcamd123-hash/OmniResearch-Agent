@@ -3,6 +3,7 @@ from backend.agents.planner_agent import PlannerAgent
 from backend.executor.dag_executor import DAGExecutor
 from backend.utils.logger import stream_log
 from backend.runtime.runtime_state import state
+from backend.memory.memory_store import memory
 from backend.storage.repository import (
     TaskRepository,
     WorkflowRepository,
@@ -24,6 +25,13 @@ class WorkflowExecutor:
         await stream_log(
             f"[System] Starting DAG workflow "
             f"{workflow_id}"
+        )
+
+        # Memory: workflow start
+        await memory.add(
+            f"[WORKFLOW START] {workflow_id} "
+            f"- {task}",
+            source="workflow",
         )
 
         # DB: create workflow
@@ -73,11 +81,25 @@ class WorkflowExecutor:
                 "completed" if is_done else "failed",
             )
 
+            # Memory: task done
+            await memory.add(
+                f"[TASK DONE] {t.task_id} "
+                f"- {t.status}",
+                source="task",
+            )
+
         # DB: complete workflow
         await self.workflow_repo.complete_workflow(
             workflow_id=workflow_id,
             completed_tasks=completed,
             token_usage=0,
+        )
+
+        # Memory: workflow end
+        await memory.add(
+            f"[WORKFLOW END] {workflow_id} "
+            f"completed={completed}",
+            source="workflow",
         )
 
         await stream_log(

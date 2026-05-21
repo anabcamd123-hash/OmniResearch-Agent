@@ -2,7 +2,6 @@ from backend.agents.coding_agent import CodingAgent
 from backend.agents.verify_agent import VerifyAgent
 from backend.agents.reflection_agent import ReflectionAgent
 from backend.utils.logger import stream_log
-from backend.runtime.runtime_state import state
 
 
 class AutoFixExecutor:
@@ -30,14 +29,6 @@ class AutoFixExecutor:
             verify = self.verifier.run(code)
 
             if verify.passed:
-                state.auto_fix_stats[
-                    "success"
-                ] += 1
-
-                state.auto_fix_stats[
-                    "total_retry"
-                ] += retry
-
                 await stream_log(
                     f"[AutoFix] success after "
                     f"{retry} retries"
@@ -49,10 +40,6 @@ class AutoFixExecutor:
                 f"[AutoFix] verify failed, "
                 f"retry {retry + 1}"
             )
-
-            state.auto_fix_stats[
-                "total_retry"
-            ] += 1
 
             feedback = self.reflector.run(
                 {"code": code, "score": 0}
@@ -74,8 +61,6 @@ Fix based on feedback:
             )
 
             retry += 1
-
-        state.auto_fix_stats["failed"] += 1
 
         raise Exception(
             f"AutoFix failed after "

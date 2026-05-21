@@ -3,6 +3,7 @@ class RuntimeState:
     def __init__(self):
 
         # Real-time UI state only
+        # Persistent data → SQLite
         self.current_dag = ""
 
         self.timeline = []
@@ -12,13 +13,7 @@ class RuntimeState:
             "research": "idle",
             "coding": "idle",
             "verify": "idle",
-            "reflection": "idle"
-        }
-
-        self.auto_fix_stats = {
-            "success": 0,
-            "failed": 0,
-            "total_retry": 0,
+            "reflection": "idle",
         }
 
 state = RuntimeState()

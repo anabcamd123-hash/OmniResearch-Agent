@@ -1,36 +1,38 @@
-from datetime import datetime
+from backend.storage.repository import MemoryRepository
 
 
 class MemoryStore:
 
     def __init__(self):
 
-        self.memories = []
+        self.repo = MemoryRepository()
 
-    def add(self, item):
+    async def add(
+        self,
+        item,
+        source="agent"
+    ):
 
-        record = {
-            "data": item,
-            "time": datetime.now().strftime(
-                "%H:%M:%S"
-            )
-        }
+        await self.repo.add_memory(
+            content=str(item),
+            source=source
+        )
 
-        self.memories.append(record)
-
-    def get_recent(
+    async def get_recent(
         self,
         limit=10
     ):
 
+        rows = await self.repo.get_recent(limit)
+
         return [
-            m["data"]
-            for m in self.memories[-limit:]
+            r["content"]
+            for r in rows
         ]
 
-    def clear(self):
+    async def clear(self):
 
-        self.memories = []
+        await self.repo.clear()
 
 
 memory = MemoryStore()

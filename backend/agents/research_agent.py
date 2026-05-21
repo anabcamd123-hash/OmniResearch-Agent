@@ -17,7 +17,7 @@ llm = get_provider()
 
 class ResearchAgent:
 
-    def run(self, task: str):
+    async def run(self, task: str):
 
         state.agent_status["research"] = "running"
 
@@ -129,11 +129,11 @@ Provide a concise summary (2-3 sentences).
             ],
             "search_results": search_results,
             "github": github_data,
-            "rag_context": rag_context
+            "rag_context": rag_context,
         }
 
-        # Save to memory
-        memory.add(result)
+        # Save to memory (DB)
+        await memory.add(result, source="research")
 
         log_tokens(120)
 
@@ -141,13 +141,11 @@ Provide a concise summary (2-3 sentences).
             "[ResearchAgent] Research completed"
         )
 
-        state.agent_status["research"] = (
-            "completed"
-        )
+        state.agent_status["research"] = "completed"
 
         state.timeline.append({
             "agent": "Research",
-            "event": "completed"
+            "event": "completed",
         })
 
         return result

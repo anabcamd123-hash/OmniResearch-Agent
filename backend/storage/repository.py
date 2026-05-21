@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from .database import AsyncSessionLocal
 from .models import (
@@ -6,6 +6,7 @@ from .models import (
     WorkflowRecord,
     TokenUsage,
     LogRecord,
+    MemoryRecord,
 )
 
 
@@ -299,3 +300,59 @@ class LogRepository:
             result = await db.execute(stmt)
 
             return result.scalars().all()
+
+
+class MemoryRepository:
+
+    async def add_memory(
+        self,
+        content: str,
+        source: str = "agent",
+    ):
+
+        async with AsyncSessionLocal() as db:
+
+            record = MemoryRecord(
+                content=content,
+                source=source,
+            )
+
+            db.add(record)
+
+            await db.commit()
+
+    async def get_recent(
+        self,
+        limit: int = 20,
+    ):
+
+        async with AsyncSessionLocal() as db:
+
+            result = await db.execute(
+                select(MemoryRecord)
+                .order_by(
+                    MemoryRecord.id.desc()
+                )
+                .limit(limit)
+            )
+
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "content": r.content,
+                    "source": r.source,
+                    "time": str(r.created_at),
+                }
+                for r in rows
+            ]
+
+    async def clear(self):
+
+        async with AsyncSessionLocal() as db:
+
+            await db.execute(
+                delete(MemoryRecord)
+            )
+
+            await db.commit()

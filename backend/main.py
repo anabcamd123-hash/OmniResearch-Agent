@@ -10,6 +10,7 @@ from backend.api.routes_dashboard import router as dashboard_router
 from backend.api.routes_history import router as history_router
 from backend.api.routes_db import router as db_router
 from backend.api.routes_upload import router as upload_router
+from backend.api.routes_memory import router as memory_router
 from backend.storage.init_db import init_db
 
 app = FastAPI()
@@ -28,6 +29,7 @@ app.include_router(dashboard_router)
 app.include_router(history_router)
 app.include_router(db_router)
 app.include_router(upload_router)
+app.include_router(memory_router)
 
 
 @app.on_event("startup")

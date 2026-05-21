@@ -59,7 +59,7 @@ class DAGExecutor:
                     )
 
                 elif task.task_type == "research":
-                    result = self.researcher.run(
+                    result = await self.researcher.run(
                         task.task_id
                     )
 

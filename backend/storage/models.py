@@ -116,3 +116,25 @@ class LogRecord(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+
+class MemoryRecord(Base):
+
+    __tablename__ = "memories"
+
+    id = Column(
+        Integer, primary_key=True
+    )
+
+    content = Column(
+        Text, nullable=False
+    )
+
+    source = Column(
+        Text, default="agent"
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
