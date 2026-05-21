@@ -10,10 +10,7 @@ from backend.api.routes_dashboard import router as dashboard_router
 from backend.api.routes_history import router as history_router
 from backend.api.routes_db import router as db_router
 from backend.api.routes_upload import router as upload_router
-from backend.database.repository import init_db
-
-# Initialize SQLite database
-init_db()
+from backend.storage.init_db import init_db
 
 app = FastAPI()
 
@@ -31,6 +28,11 @@ app.include_router(dashboard_router)
 app.include_router(history_router)
 app.include_router(db_router)
 app.include_router(upload_router)
+
+
+@app.on_event("startup")
+async def startup():
+    await init_db()
 
 
 @app.get("/")
