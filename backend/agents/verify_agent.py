@@ -1,14 +1,21 @@
-from backend.utils.logger import logger
+from backend.utils.logger import logger, log_tokens
+from backend.runtime.runtime_state import state
 
 class VerifyAgent:
 
     def run(self, code_result):
 
+        state.agent_status["verify"] = "running"
+
         logger.info("[VerifyAgent] Running verification...")
 
         success = True
 
+        log_tokens(50)
+
         logger.info("[VerifyAgent] Verification passed")
+
+        state.agent_status["verify"] = "completed"
 
         return {
             "success": success,

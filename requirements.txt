@@ -1,3 +1,13 @@
+# Project dependencies
+fastapi>=0.100.0
+uvicorn>=0.23.0
+redis>=5.0.0
+pydantic>=2.0.0
+aioredis>=2.0.0
+python-multipart>=0.0.6
+websockets>=12.0
+
+# System packages
 attrs==21.2.0
 Automat==20.2.0
 Babel==2.8.0

@@ -1,11 +1,13 @@
 from backend.executor.task import Task
-
 from backend.utils.logger import stream_log
+from backend.runtime.runtime_state import state
 
 
 class PlannerAgent:
 
     async def create_plan(self, task: str):
+
+        state.agent_status["planner"] = "running"
 
         await stream_log(
             f"[Planner] Creating DAG workflow for: {task}"
@@ -40,5 +42,7 @@ class PlannerAgent:
         await stream_log(
             f"[Planner] DAG created with {len(tasks)} tasks"
         )
+
+        state.agent_status["planner"] = "completed"
 
         return tasks

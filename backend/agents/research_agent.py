@@ -1,8 +1,11 @@
-from backend.utils.logger import logger
+from backend.utils.logger import logger, log_tokens
+from backend.runtime.runtime_state import state
 
 class ResearchAgent:
 
     def run(self, task: str):
+
+        state.agent_status["research"] = "running"
 
         logger.info("[ResearchAgent] Searching knowledge base...")
 
@@ -14,6 +17,10 @@ class ResearchAgent:
             ]
         }
 
+        log_tokens(120)
+
         logger.info("[ResearchAgent] Research completed")
+
+        state.agent_status["research"] = "completed"
 
         return result

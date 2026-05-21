@@ -34,27 +34,27 @@
 
 <body>
 
-    <h1>OmniResearch Agent Dashboard</h1>
+    <h1>OmniResearch Dashboard</h1>
 
     <div class="card">
 
-        <h2>System Status</h2>
+        <h2>Runtime Metrics</h2>
 
-        <p id="status">
-            Runtime Active
-        </p>
+        <p id="totalTasks"></p>
+
+        <p id="completedTasks"></p>
+
+        <p id="runningTasks"></p>
+
+        <p id="tokenUsage"></p>
 
     </div>
 
     <div class="card">
 
-        <h2>Task Metrics</h2>
+        <h2>Agent Status</h2>
 
-        <p>Total Tasks: 4</p>
-
-        <p>Completed: 4</p>
-
-        <p>Runtime: 4.2s</p>
+        <pre id="agents"></pre>
 
     </div>
 
@@ -85,20 +85,50 @@
             logs.scrollTop = logs.scrollHeight
         }
 
+        async function updateDashboard() {
+
+            const res = await fetch(
+                "http://127.0.0.1:8000/dashboard"
+            )
+
+            const data = await res.json()
+
+            document.getElementById(
+                "totalTasks"
+            ).innerText =
+                "Total Tasks: " + data.total_tasks
+
+            document.getElementById(
+                "completedTasks"
+            ).innerText =
+                "Completed: " + data.completed_tasks
+
+            document.getElementById(
+                "runningTasks"
+            ).innerText =
+                "Running: " + data.running_tasks
+
+            document.getElementById(
+                "tokenUsage"
+            ).innerText =
+                "Tokens: " + data.token_usage
+
+            document.getElementById(
+                "agents"
+            ).innerText =
+                JSON.stringify(
+                    data.agents,
+                    null,
+                    2
+                )
+        }
+
+        setInterval(
+            updateDashboard,
+            1000
+        )
+
     </script>
-    <div class="card">
-
-    <h2>Agent Status</h2>
-
-    <p>PlannerAgent: Active</p>
-
-    <p>ResearchAgent: Active</p>
-
-    <p>CodingAgent: Active</p>
-
-    <p>VerifyAgent: Active</p>
-
-    </div>
 
 </body>
 
