@@ -5,6 +5,11 @@ from backend.api.routes_task import router as task_router
 from backend.api.routes_ws import router as ws_router
 from backend.api.routes_dashboard import router as dashboard_router
 from backend.api.routes_history import router as history_router
+from backend.api.routes_db import router as db_router
+from backend.database.repository import init_db
+
+# Initialize SQLite database
+init_db()
 
 app = FastAPI()
 
@@ -20,6 +25,8 @@ app.include_router(task_router)
 app.include_router(ws_router)
 app.include_router(dashboard_router)
 app.include_router(history_router)
+app.include_router(db_router)
+
 
 @app.get("/")
 async def root():

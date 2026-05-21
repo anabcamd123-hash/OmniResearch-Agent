@@ -1,5 +1,8 @@
 from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
+from backend.tools.python_runtime import PythonRuntime
+
+runtime = PythonRuntime()
 
 class CodingAgent:
 
@@ -14,14 +17,24 @@ class CodingAgent:
 
         logger.info("[CodingAgent] Generating code...")
 
-        code = '''
-def train():
-    print("training model")
-'''
+        code = """
+def add(a, b):
+    return a + b
+
+print(add(1, 2))
+"""
+
+        logger.info("[CodingAgent] Executing code...")
+
+        execution_result = runtime.execute(code)
 
         log_tokens(250)
 
-        logger.info("[CodingAgent] Code generation completed")
+        logger.info(
+            f"[CodingAgent] Execution "
+            f"{'success' if execution_result['success'] else 'failed'}: "
+            f"{execution_result['stdout'].strip()}"
+        )
 
         state.agent_status["coding"] = "completed"
 
@@ -31,5 +44,6 @@ def train():
         })
 
         return {
-            "code": code
+            "code": code,
+            "execution": execution_result
         }
