@@ -1,232 +1,383 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OmniResearch Dashboard</title>
-
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/dagre-d3@0.6.4/dist/dagre-d3.min.js"></script>
     <style>
-
-        body {
-            background: #0f172a;
-            color: white;
-            font-family: Arial;
-            padding: 20px;
-        }
-
-        .card {
-            background: #1e293b;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 10px;
-        }
-
-        #logs {
-            height: 400px;
-            overflow-y: scroll;
-            background: black;
-            padding: 10px;
-        }
-
-        #history {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .timeline-item {
-            padding: 4px 0;
-            border-bottom: 1px solid #334155;
-        }
-
-        .timeline-item .started {
-            color: #38bdf8;
-        }
-
-        .timeline-item .completed {
-            color: #4ade80;
-        }
-
-        .timeline-item .failed {
-            color: #f87171;
-        }
-
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:#0f172a;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;padding:20px}
+        h1{font-size:1.8em;margin-bottom:20px;color:#38bdf8}
+        h2{font-size:1.1em;margin-bottom:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+        .card{background:#1e293b;padding:20px;border-radius:10px;border:1px solid #334155}
+        .card-full{grid-column:1/-1}
+        .login-bar{display:flex;gap:8px;align-items:center;margin-bottom:16px}
+        .login-bar input{padding:6px 12px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85em}
+        .btn{background:#2563eb;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.85em}
+        .btn:hover{background:#3b82f6}
+        .btn-green{background:#16a34a}.btn-green:hover{background:#22c55e}
+        .btn-danger{background:#dc2626}.btn-danger:hover{background:#ef4444}
+        .btn-sm{padding:4px 10px;font-size:.8em}
+        .user-info{color:#4ade80;font-size:.9em}
+        .role-badge{padding:2px 8px;border-radius:10px;font-size:.75em;font-weight:600}
+        .role-admin{background:#dc2626;color:#fff}
+        .role-viewer{background:#475569;color:#cbd5e1}
+        .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+        .stat-box{background:#0f172a;padding:16px;border-radius:8px;text-align:center}
+        .stat-value{font-size:2em;font-weight:700;color:#38bdf8}
+        .stat-label{font-size:.8em;color:#64748b;margin-top:4px}
+        .agents{display:flex;flex-wrap:wrap;gap:8px}
+        .agent-badge{padding:6px 14px;border-radius:20px;font-size:.85em;font-weight:600}
+        .agent-idle{background:#475569;color:#cbd5e1}
+        .agent-running{background:#d97706;color:#fff;animation:pulse 1.5s infinite}
+        .agent-completed{background:#16a34a;color:#fff}
+        .agent-failed{background:#dc2626;color:#fff}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+        .logs{height:300px;overflow-y:auto;background:#0f172a;padding:10px;border-radius:6px;font-family:monospace;font-size:.8em;line-height:1.6}
+        .log-line{color:#94a3b8}.log-error{color:#f87171}.log-info{color:#38bdf8}.log-success{color:#4ade80}.log-warn{color:#fbbf24}
+        .admin-bar{display:flex;gap:8px;margin-bottom:12px}
+        .admin-bar input{flex:1;padding:8px 12px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.9em}
+        #dagContainer{position:relative;min-height:350px;overflow:hidden}
+        #dagSvg{width:100%;height:350px;background:#0f172a;border-radius:8px}
+        #dagSvg g.node rect{rx:6;ry:6;stroke-width:2px;cursor:pointer}
+        #dagSvg g.node text{fill:#fff;font-size:13px;font-weight:600;pointer-events:none}
+        #dagSvg g.edgePath path{stroke:#475569;stroke-width:2px}
+        #dagSvg g.edgePath marker path{fill:#475569}
+        .node-tooltip{position:fixed;background:#1e293b;border:1px solid #475569;border-radius:8px;padding:12px;font-size:.85em;z-index:100;pointer-events:none;display:none;min-width:180px;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+        .tt-label{color:#38bdf8;font-weight:600;margin-bottom:6px}
+        .tt-row{margin:3px 0;display:flex;justify-content:space-between;gap:16px}
+        .tt-key{color:#94a3b8}.tt-val{color:#e2e8f0}
+        .node-detail{background:#0f172a;padding:16px;border-radius:8px;margin-top:12px;display:none}
+        .node-detail.visible{display:block}
+        .node-detail h3{color:#38bdf8;margin-bottom:8px}
+        .close-btn{float:right;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1.2em}
+        .dep-tag{background:#334155;padding:2px 8px;border-radius:4px;font-size:.8em;cursor:pointer;margin:2px;display:inline-block}
+        .dep-tag:hover{background:#475569}
+        .task-logs{background:#0f172a;padding:10px;border-radius:6px;max-height:150px;overflow-y:auto;font-family:monospace;font-size:.75em;line-height:1.5;margin-top:8px}
+        .task-logs div{color:#94a3b8}
     </style>
-
-    <script type="module">
-        import mermaid from
-        'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-
-        mermaid.initialize({
-            startOnLoad: true,
-            theme: 'dark'
-        });
-
-        window.mermaid = mermaid;
-    </script>
-
 </head>
-
 <body>
-
-    <h1>OmniResearch Dashboard</h1>
-
-    <div class="card">
-
-        <h2>Runtime Metrics</h2>
-
-        <p id="totalTasks"></p>
-
-        <p id="completedTasks"></p>
-
-        <p id="runningTasks"></p>
-
-        <p id="tokenUsage"></p>
-
+    <h1>🐾 OmniResearch Agent Dashboard</h1>
+    <div class="login-bar" id="loginBar">
+        <input id="username" placeholder="Username" value="admin">
+        <input id="password" type="password" placeholder="Password" value="admin123">
+        <button class="btn btn-green" onclick="login()">Login</button>
+        <span id="loginStatus"></span>
     </div>
-
-    <div class="card">
-
-        <h2>Agent Status</h2>
-
-        <pre id="agents"></pre>
-
-    </div>
-
-    <div class="card">
-
-        <h2>DAG Workflow</h2>
-
-        <div id="dag" class="mermaid">
-graph TD
-    Loading...
+    <div class="login-bar" id="userBar" style="display:none">
+        <span class="user-info">Logged in as <b id="currentUser"></b></span>
+        <span id="roleBadge"></span>
+        <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
+        <div style="margin-left:20px;display:flex;gap:8px">
+            <button class="btn btn-sm" onclick="exportCSV()">📥 CSV</button>
+            <button class="btn btn-sm" onclick="exportJSON()">📥 JSON</button>
         </div>
-
     </div>
-
-    <div class="card">
-
-        <h2>Task History</h2>
-
-        <pre id="history"></pre>
-
+    <div class="card card-full" style="margin-bottom:16px">
+        <div class="stats">
+            <div class="stat-box"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+            <div class="stat-box"><div class="stat-value" id="statCompleted" style="color:#4ade80">0</div><div class="stat-label">Completed</div></div>
+            <div class="stat-box"><div class="stat-value" id="statRunning" style="color:#fbbf24">0</div><div class="stat-label">Running</div></div>
+            <div class="stat-box"><div class="stat-value" id="statDLQ" style="color:#f87171">0</div><div class="stat-label">DLQ</div></div>
+        </div>
     </div>
-
-    <div class="card">
-
-        <h2>Agent Timeline</h2>
-
-        <div id="timeline"></div>
-
+    <div class="grid">
+        <div class="card">
+            <h2>Agent Status</h2>
+            <div class="agents" id="agents"></div>
+        </div>
+        <div class="card card-full">
+            <h2>DAG Workflow</h2>
+            <div id="dagContainer">
+                <svg id="dagSvg"><g/></svg>
+                <div class="node-tooltip" id="tooltip"></div>
+            </div>
+            <div class="node-detail" id="nodeDetail">
+                <button class="close-btn" onclick="closeDetail()">×</button>
+                <h3 id="detailTitle">-</h3>
+                <div class="tt-row"><span class="tt-key">Agent</span><span class="tt-val" id="detailAgent">-</span></div>
+                <div class="tt-row"><span class="tt-key">Status</span><span class="tt-val" id="detailStatus">-</span></div>
+                <div class="tt-row"><span class="tt-key">Retry</span><span class="tt-val" id="detailRetry">-</span></div>
+                <div class="tt-row"><span class="tt-key">Duration</span><span class="tt-val" id="detailDuration">-</span></div>
+                <div class="tt-row"><span class="tt-key">Progress</span><span class="tt-val" id="detailProgress">-</span></div>
+                <div style="margin-top:8px"><span class="tt-key">Dependencies:</span><div id="detailDeps" style="margin-top:4px"></div></div>
+                <div style="margin-top:8px"><span class="tt-key">Logs:</span><div class="task-logs" id="detailLogs"></div></div>
+            </div>
+        </div>
+        <div class="card card-full" id="adminPanel" style="display:none">
+            <h2>Admin Controls</h2>
+            <div class="admin-bar">
+                <input id="workflowInput" placeholder="Workflow task description..."/>
+                <button class="btn btn-green" onclick="startWorkflow()">▶ Start Workflow</button>
+            </div>
+        </div>
+        <div class="card card-full">
+            <h2>Live Logs</h2>
+            <div class="logs" id="logs"></div>
+        </div>
     </div>
+<script>
+let token='',currentRole='',currentUsername='',ws,selectedTask=null;
+let taskInfo={},taskStatus={},agentStates={};
+let lastRender=0;
 
-    <div class="card">
+// ── 数据结构 ──────────────────────────
+function addTask(task){
+    if(!taskInfo[task.task_id]){
+        taskInfo[task.task_id]={
+            agent:task.agent||'',retry:task.retry||0,duration:task.duration||0,
+            deps:task.deps||[],children:task.children||[],
+            parent:task.parent||null,collapsed:false,hidden:false,
+            highlight:false,progress:task.progress||0,
+            logs:[],loadedChildren:[],expanded:false
+        };
+    }
+}
 
-        <h2>Live Logs</h2>
+// ── Auth ──────────────────────────────
+async function login(){
+    const u=document.getElementById('username').value,p=document.getElementById('password').value;
+    try{
+        const r=await fetch('/auth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({username:u,password:p})});
+        if(!r.ok){document.getElementById('loginStatus').textContent='❌';return}
+        token=(await r.json()).access_token;
+        const me=await(await fetch('/auth/me',{headers:{'Authorization':`Bearer ${token}`}})).json();
+        currentRole=me.role;currentUsername=me.sub;
+        document.getElementById('loginBar').style.display='none';
+        document.getElementById('userBar').style.display='flex';
+        document.getElementById('currentUser').textContent=currentUsername;
+        const b=document.getElementById('roleBadge');b.textContent=currentRole;b.className=`role-badge role-${currentRole}`;
+        if(currentRole==='admin')document.getElementById('adminPanel').style.display='block';
+        if(ws)ws.close();connectWS();
+    }catch(e){document.getElementById('loginStatus').textContent='❌ Error'}
+}
+function logout(){token='';currentRole='';document.getElementById('loginBar').style.display='flex';document.getElementById('userBar').style.display='none';document.getElementById('adminPanel').style.display='none'}
+function exportCSV(){if(token)window.open(`/export/history/csv?access_token=${token}`)}
+function exportJSON(){if(token)window.open(`/export/history/json?access_token=${token}`)}
 
-        <div id="logs"></div>
+// ── WebSocket ─────────────────────────
+function connectWS(){
+    ws=new WebSocket(`ws://${location.host}/ws`);
+    ws.onmessage=event=>{
+        try{
+            const d=JSON.parse(event.data);
+            if(d.type==='task_update')handleTaskUpdate(d);
+            else if(d.type==='dag_update')handleDAGUpdate(d);
+            else if(d.type==='state_update')handleStateUpdate(d);
+            else addLog(JSON.stringify(d),'info');
+        }catch(e){addLog(event.data,getLogClass(event.data))}
+    };
+    ws.onopen=()=>addLog('[WS] Connected','info');
+    ws.onclose=()=>{addLog('[WS] Disconnected','warn');setTimeout(connectWS,3000)};
+}
+function getLogClass(m){if(m.includes('ERROR')||m.includes('FAILED'))return'error';if(m.includes('completed'))return'success';if(m.includes('retry'))return'warn';if(m.includes('['))return'info';return''}
+function addLog(text,cls=''){const el=document.getElementById('logs'),d=document.createElement('div');d.className=`log-${cls}`;d.textContent=`[${new Date().toLocaleTimeString()}] ${text}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
 
-    </div>
+function handleStateUpdate(d){
+    for(const[a,s]of Object.entries(d.agent_status||{}))agentStates[a]=s;
+    renderAgentBadges();
+}
 
-    <script>
+function handleTaskUpdate(d){
+    taskStatus[d.task_id]=d.status;
+    addTask({task_id:d.task_id,agent:d.agent,retry:d.retry,duration:d.duration,deps:d.deps||[],children:d.children||[]});
+    const t=taskInfo[d.task_id];
+    t.agent=d.agent;t.retry=d.retry;t.duration=d.duration;
+    if(d.deps)t.deps=d.deps;if(d.children)t.children=d.children;
+    if(d.progress!==undefined)t.progress=d.progress;
+    // 日志
+    const now=new Date().toLocaleTimeString();
+    t.logs.push({time:now,message:`${d.status}${d.retry>0?' retry '+d.retry:''}${d.duration>0?' '+d.duration+'s':''}`});
+    if(d.status==='running')agentStates[d.agent?.toLowerCase()]='running';
+    else if(d.status==='completed')agentStates[d.agent?.toLowerCase()]='completed';
+    else if(d.status==='failed')agentStates[d.agent?.toLowerCase()]='failed';
+    renderAgentBadges();
+    const cls=d.status==='failed'?'error':d.status==='completed'?'success':'info';
+    let msg=`[${d.agent}] ${d.task_id}: ${d.status}`;
+    if(d.retry>0)msg+=` (retry ${d.retry})`;if(d.duration>0)msg+=` ${d.duration}s`;
+    addLog(msg,cls);
+    renderDagreThrottled();
+    if(selectedTask===d.task_id)showDetail(d.task_id);
+}
 
-        const logs = document.getElementById("logs")
+function handleDAGUpdate(d){
+    taskStatus={};taskInfo={};
+    const lines=(d.dag||'').split('\n'),edges=[],nodes=new Set();
+    lines.forEach(l=>{const m=l.trim().match(/^(\S+)\s*-->\s*(\S+)/);if(m){nodes.add(m[1]);nodes.add(m[2]);edges.push([m[1],m[2]])}const m2=l.trim().match(/^(\S+)\["?([^"\]]*)"?]/);if(m2)nodes.add(m2[1])});
+    const cMap={},dMap={};
+    edges.forEach(([f,t])=>{if(!cMap[f])cMap[f]=[];cMap[f].push(t);if(!dMap[t])dMap[t]=[];dMap[t].push(f)});
+    nodes.forEach(n=>{addTask({task_id:n,agent:'',retry:0,duration:0,deps:dMap[n]||[],children:cMap[n]||[]});if(!taskStatus[n])taskStatus[n]='pending'});
+    addLog('[DAG] Updated','info');renderDagre();
+}
 
-        const ws = new WebSocket(
-            "ws://127.0.0.1:8000/ws/logs"
-        )
+// ── Agent Badges ──────────────────────
+function renderAgentBadges(){const el=document.getElementById('agents');el.innerHTML='';for(const[n,s]of Object.entries(agentStates)){const b=document.createElement('span');b.className=`agent-badge agent-${s}`;b.textContent=`${n}: ${s}`;el.appendChild(b)}}
 
-        ws.onmessage = (event) => {
+// ── 颜色 ──────────────────────────────
+function getNodeColor(status,retry){
+    let b;switch(status){case'completed':b=[34,197,94];break;case'running':b=[251,191,36];break;case'failed':b=[239,68,68];break;case'retrying':b=[245,158,11];break;default:b=[100,116,139]}
+    const f=Math.min(retry*.15,.5);return`rgb(${b.map(v=>Math.floor(v*(1-f))).join(',')})`
+}
+function getStroke(s){switch(s){case'completed':return'#22c55e';case'running':return'#fbbf24';case'failed':return'#ef4444';case'retrying':return'#f59e0b';default:return'#475569'}}
 
-            const div = document.createElement("div")
-
-            div.innerText = event.data
-
-            logs.appendChild(div)
-
-            logs.scrollTop = logs.scrollHeight
+// ── DFS 依赖链高亮 ────────────────────
+function highlightDeps(taskId){
+    const visited=new Set();
+    function dfs(id){if(visited.has(id)||!taskInfo[id])return;visited.add(id);taskInfo[id].highlight=true;(taskInfo[id].deps||[]).forEach(dfs);(taskInfo[id].children||[]).forEach(dfs)}
+    for(const id in taskInfo)taskInfo[id].highlight=false;
+    dfs(taskId);
+    // 应用高亮
+    d3.selectAll('#dagSvg g.node').each(function(id){
+        const t=taskInfo[id];if(!t)return;
+        const rect=d3.select(this).select('rect');
+        if(t.highlight){
+            rect.style('stroke',id===taskId?'#f97316':'#fbbf24').style('stroke-width','3px');
+            d3.select(this).style('opacity',1);
+        }else{
+            rect.style('stroke','#475569').style('stroke-width','1px');
+            d3.select(this).style('opacity',.3);
         }
+    });
+}
+function resetHighlight(){
+    selectedTask=null;
+    d3.selectAll('#dagSvg g.node').each(function(id){
+        const s=taskStatus[id]||'pending';
+        d3.select(this).select('rect').style('stroke',getStroke(s)).style('stroke-width','2px');
+        d3.select(this).style('opacity',1);
+    });
+}
 
-        async function updateDashboard() {
+// ── 折叠/展开 ─────────────────────────
+function toggleNode(taskId){
+    const t=taskInfo[taskId];if(!t||!t.children?.length)return;
+    t.collapsed=!t.collapsed;
+    function setHide(id,hidden){const c=taskInfo[id];if(!c)return;c.hidden=hidden;(c.children||[]).forEach(cid=>setHide(cid,hidden))}
+    t.children.forEach(cid=>setHide(cid,t.collapsed));
+    renderDagre();
+}
 
-            const res = await fetch(
-                "http://127.0.0.1:8000/dashboard"
-            )
+// ── Dagre 渲染 ────────────────────────
+function buildDagreGraph(){
+    const g=new dagreD3.graphlib.Graph().setGraph({rankdir:'TD',nodesep:40,ranksep:60,marginx:20,marginy:20}).setDefaultEdgeLabel(()=>({}));
+    for(const[id,t]of Object.entries(taskInfo)){
+        if(t.hidden)continue;
+        const s=taskStatus[id]||'pending';
+        const hasChildren=t.children?.length>0;
+        const label=hasChildren?`${id} [${t.collapsed?'+':'−'}${t.children.length}]`:id;
+        g.setNode(id,{label,width:Math.min(100+t.duration*15,180),height:44,rx:6,ry:6});
+        if(!t.collapsed)(t.children||[]).forEach(c=>{if(!taskInfo[c]?.hidden)g.setEdge(id,c)});
+        t.deps.forEach(d=>{if(taskInfo[d]&&!taskInfo[d].hidden)g.setEdge(d,id)});
+    }
+    return g;
+}
 
-            const data = await res.json()
-
-            document.getElementById(
-                "totalTasks"
-            ).innerText =
-                "Total Tasks: " + data.total_tasks
-
-            document.getElementById(
-                "completedTasks"
-            ).innerText =
-                "Completed: " + data.completed_tasks
-
-            document.getElementById(
-                "runningTasks"
-            ).innerText =
-                "Running: " + data.running_tasks
-
-            document.getElementById(
-                "tokenUsage"
-            ).innerText =
-                "Tokens: " + data.token_usage
-
-            document.getElementById(
-                "agents"
-            ).innerText =
-                JSON.stringify(
-                    data.agents,
-                    null,
-                    2
-                )
-
-            // DAG
-            if (data.dag && data.dag.trim()) {
-                const dagEl = document.getElementById("dag")
-                dagEl.textContent = data.dag
-                dagEl.removeAttribute("data-processed")
-                if (window.mermaid) {
-                    window.mermaid.init(undefined, dagEl)
-                }
-            }
-
-            // Timeline
-            if (data.timeline && data.timeline.length > 0) {
-                const timelineEl = document.getElementById("timeline")
-                timelineEl.innerHTML = data.timeline.map(
-                    t => `<div class="timeline-item">
-                        <span class="${t.event}">${t.agent} ${t.event}</span>
-                    </div>`
-                ).join("")
-            }
+function renderDagre(){
+    if(!Object.keys(taskInfo).length)return;
+    const now=Date.now();
+    const svg=d3.select('#dagSvg'),container=document.getElementById('dagContainer');
+    const width=container.clientWidth,height=350;
+    svg.attr('width',width).attr('height',height);
+    svg.select('g').remove();
+    const inner=svg.append('g');
+    const g=buildDagreGraph();
+    new dagreD3.render()(inner,g);
+    // 缩放
+    const zoom=d3.zoom().on('zoom',e=>inner.attr('transform',e.transform));
+    svg.call(zoom);
+    const gw=g.graph().width||1,gh=g.graph().height||1;
+    const scale=Math.min(width/(gw+60),height/(gh+60),1);
+    svg.call(zoom.transform,d3.zoomIdentity.translate((width-gw*scale)/2,(height-gh*scale)/2).scale(scale));
+    // 节点样式
+    svg.selectAll('g.node').each(function(taskId){
+        const node=d3.select(this),t=taskInfo[taskId];if(!t)return;
+        const s=taskStatus[taskId]||'pending',rect=node.select('rect');
+        // 颜色
+        const fill=t.highlight?'#f97316':getNodeColor(s,t.retry);
+        const stroke=t.highlight?'#f97316':getStroke(s);
+        const sw=t.highlight?'3px':'2px';
+        rect.transition().duration(300).style('fill',fill).style('stroke',stroke).style('stroke-width',sw);
+        // 进度条
+        node.selectAll('rect.prog-bg,rect.prog-bar,text.dur-text,circle.agent-dot').remove();
+        const bbox=rect.node()?.getBBox();if(!bbox)return;
+        const w=bbox.width;
+        // 进度条背景
+        node.append('rect').attr('class','prog-bg').attr('x',bbox.x+4).attr('y',bbox.y+bbox.height-8).attr('width',w-8).attr('height',4).style('fill','#1e293b').style('rx',2);
+        // 进度条
+        node.append('rect').attr('class','prog-bar').attr('x',bbox.x+4).attr('y',bbox.y+bbox.height-8).attr('width',(w-8)*Math.min(t.progress,100)/100).attr('height',4).style('fill',s==='completed'?'#22c55e':'#38bdf8').style('rx',2);
+        // Duration 文本
+        if(t.duration>0){
+            node.append('text').attr('class','dur-text').attr('x',bbox.x+w/2).attr('y',bbox.y+bbox.height+14).attr('text-anchor','middle').style('font-size','10px').style('fill','#64748b').text(`${t.duration.toFixed(1)}s`);
         }
+        // Agent 状态圆点
+        const agentList=['research','coding','verify','reflection','autofix'];
+        agentList.forEach((a,i)=>{
+            const as=agentStates[a]||'idle';
+            const color=as==='running'?'#fbbf24':as==='completed'?'#22c55e':as==='failed'?'#ef4444':'#475569';
+            node.append('circle').attr('class','agent-dot').attr('cx',bbox.x+8+i*12).attr('cy',bbox.y-8).attr('r',4).style('fill',color);
+        });
+        // 入场动画
+        node.style('opacity',0).transition().duration(200).delay(Object.keys(taskInfo).indexOf(taskId)*30).style('opacity',t.hidden?0:1);
+    });
+    // 拖拽
+    svg.selectAll('g.node').call(d3.drag().on('start',function(){d3.select(this).raise()}).on('drag',function(e){d3.select(this).attr('transform',`translate(${e.x},${e.y})`)}));
+    // 事件
+    svg.selectAll('g.node').on('mouseenter',(e,id)=>showTooltip(e,id));
+    svg.selectAll('g.node').on('mouseleave',hideTooltip);
+    svg.selectAll('g.node').on('click',(e,id)=>{e.stopPropagation();highlightDeps(id);showDetail(id);toggleNode(id)});
+}
 
-        async function updateHistory() {
+function renderDagreThrottled(){const now=Date.now();if(now-lastRender<200)return;lastRender=now;renderDagre()}
 
-            const res = await fetch(
-                "http://127.0.0.1:8000/history"
-            )
+// ── Tooltip ───────────────────────────
+function showTooltip(event,taskId){
+    const t=taskInfo[taskId],s=taskStatus[taskId]||'pending';if(!t)return;
+    const tip=document.getElementById('tooltip');tip.style.display='block';
+    tip.style.left=(event.clientX+14)+'px';tip.style.top=(event.clientY+14)+'px';
+    tip.innerHTML=`<div class="tt-label">${taskId}</div>
+        <div class="tt-row"><span class="tt-key">Agent</span><span class="tt-val">${t.agent||'-'}</span></div>
+        <div class="tt-row"><span class="tt-key">Status</span><span class="tt-val" style="color:${getStroke(s)}">${s}</span></div>
+        <div class="tt-row"><span class="tt-key">Retry</span><span class="tt-val">${t.retry}</span></div>
+        <div class="tt-row"><span class="tt-key">Duration</span><span class="tt-val">${t.duration}s</span></div>
+        <div class="tt-row"><span class="tt-key">Progress</span><span class="tt-val">${t.progress}%</span></div>
+        ${t.deps?.length?`<div class="tt-row"><span class="tt-key">Deps</span><span class="tt-val">${t.deps.join(', ')}</span></div>`:''}
+        ${t.children?.length?`<div class="tt-row"><span class="tt-key">Children</span><span class="tt-val">${t.children.length} (${t.collapsed?'collapsed':'expanded'})</span></div>`:''}`;
+}
+function hideTooltip(){document.getElementById('tooltip').style.display='none'}
 
-            const data = await res.json()
+// ── 详情面板 ──────────────────────────
+function showDetail(taskId){
+    const t=taskInfo[taskId],s=taskStatus[taskId]||'pending';if(!t)return;
+    selectedTask=taskId;
+    document.getElementById('nodeDetail').classList.add('visible');
+    document.getElementById('detailTitle').textContent=taskId;
+    document.getElementById('detailAgent').textContent=t.agent||'-';
+    document.getElementById('detailStatus').textContent=s;
+    document.getElementById('detailStatus').style.color=getStroke(s);
+    document.getElementById('detailRetry').textContent=t.retry;
+    document.getElementById('detailDuration').textContent=t.duration+'s';
+    document.getElementById('detailProgress').textContent=t.progress+'%';
+    const depsEl=document.getElementById('detailDeps');depsEl.innerHTML='';
+    (t.deps||[]).forEach(dep=>{const tag=document.createElement('span');tag.className='dep-tag';tag.textContent=dep;tag.onclick=()=>{highlightDeps(dep);showDetail(dep)};depsEl.appendChild(tag)});
+    if(!t.deps?.length)depsEl.innerHTML='<span style="color:#64748b">None</span>';
+    // 日志
+    const logsEl=document.getElementById('detailLogs');logsEl.innerHTML='';
+    (t.logs||[]).slice(-20).forEach(l=>{const d=document.createElement('div');d.textContent=`${l.time} - ${l.message}`;logsEl.appendChild(d)});
+    logsEl.scrollTop=logsEl.scrollHeight;
+}
+function closeDetail(){document.getElementById('nodeDetail').classList.remove('visible');resetHighlight()}
 
-            document.getElementById(
-                "history"
-            ).innerText =
-                JSON.stringify(
-                    data,
-                    null,
-                    2
-                )
-        }
+// ── Admin ─────────────────────────────
+function startWorkflow(){if(currentRole!=='admin')return;const desc=document.getElementById('workflowInput').value;if(!desc)return;ws.send('start:'+desc);document.getElementById('workflowInput').value='';addLog(`[Admin] Starting: ${desc}`,'info')}
+document.getElementById('workflowInput')?.addEventListener('keydown',e=>{if(e.key==='Enter')startWorkflow()});
 
-        setInterval(updateDashboard, 1000)
-        setInterval(updateHistory, 1000)
-
-    </script>
-
+// ── Stats ─────────────────────────────
+async function fetchStats(){try{const d=await(await fetch('/dashboard')).json();document.getElementById('statTotal').textContent=d.total_tasks||0;document.getElementById('statCompleted').textContent=d.completed_tasks||0;document.getElementById('statRunning').textContent=d.running_tasks||0;document.getElementById('statDLQ').textContent=d.dlq_count||0}catch(e){}}
+setInterval(fetchStats,3000);fetchStats();
+</script>
 </body>
-
 </html>

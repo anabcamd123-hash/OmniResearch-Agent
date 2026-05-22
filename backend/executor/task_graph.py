@@ -1,18 +1,27 @@
+"""
+TaskGraph — 任务依赖图
+"""
+
+from backend.executor.task import Task
+
+
 class TaskGraph:
 
     def __init__(self):
+        self.tasks: list[Task] = []
 
-        self.tasks = []
-
-    def add_task(self, task):
-
+    def add_task(self, task: Task):
         self.tasks.append(task)
 
-    def get_ready_tasks(self, completed_tasks):
-
+    def get_ready_tasks(
+        self, completed: set
+    ) -> list[Task]:
         return [
-            task
-            for task in self.tasks
-            if task.status == "pending"
-            and task.is_ready(completed_tasks)
+            t
+            for t in self.tasks
+            if t.status == "pending"
+            and t.is_ready(completed)
         ]
+
+    def total(self) -> int:
+        return len(self.tasks)

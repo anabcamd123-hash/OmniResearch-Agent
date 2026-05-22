@@ -1,8 +1,19 @@
+"""
+ReflectionAgent - 反射 Agent（JSON 输出）
+
+旧版: "true" in output.lower() → 危险
+新版: json.loads(response) → 结构化
+"""
+
+import json
 import asyncio
 from backend.agents.base_agent import BaseAgent
+from backend.agents.reflection_result import (
+    ReflectionResult,
+)
 from backend.agents.result import AgentResult
 from backend.executor.context import ExecutionContext
-from backend.utils.logger import logger
+from backend.utils.logger import logger, log_tokens
 from backend.runtime.event_bus import event_bus
 from backend.runtime.event_types import (
     AGENT_STARTED,
@@ -10,6 +21,8 @@ from backend.runtime.event_types import (
 )
 from backend.storage.repository import MemoryRepository
 from backend.llm.provider_factory import get_provider
+
+llm = get_provider()
 
 
 class ReflectionAgent(BaseAgent):
@@ -22,7 +35,7 @@ class ReflectionAgent(BaseAgent):
         self,
         task: str,
         context: ExecutionContext,
-    ):
+    ) -> ReflectionResult:
 
         await event_bus.publish(
             AGENT_STARTED,
@@ -48,37 +61,90 @@ Code: {coding[:200]}
 Verification: {verify[:200]}
 Score: {score}/100
 
-Decide:
-1. Is this result correct and complete?
-2. If not, why?
-3. Should we retry?
+Analyze the result quality.
 
-Return format:
-need_retry: true/false
-reason: <one sentence explanation>
+Return ONLY valid JSON.
+
+Schema:
+{{
+  "need_retry": false,
+  "root_cause": "",
+  "suggestion": ""
+}}
+
+Rules:
+- need_retry: true if quality is insufficient
+- root_cause: one phrase (e.g. "missing_error_handling")
+- suggestion: one sentence fix recommendation
 """
 
         output = await asyncio.to_thread(
             self.llm.invoke, prompt
         )
 
-        need_retry = "true" in output.lower()
-        reason = output.strip()
+        log_tokens(50)
+
+        # 解析 JSON
+        try:
+            text = output.strip()
+            if text.startswith("```"):
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+
+            data = json.loads(text)
+
+            reflection = ReflectionResult(
+                need_retry=data.get(
+                    "need_retry", True
+                ),
+                root_cause=data.get(
+                    "root_cause", ""
+                ),
+                suggestion=data.get(
+                    "suggestion", ""
+                ),
+            )
+        except (
+            json.JSONDecodeError,
+            KeyError,
+        ):
+            # 解析失败默认需要重试
+            reflection = ReflectionResult(
+                need_retry=True,
+                root_cause="reflection_parse_error",
+                suggestion=output.strip(),
+            )
 
         await self.save_learning(
-            task, reason, need_retry
+            task, reflection
         )
 
-        result = AgentResult(
-            success=not need_retry,
-            content=reason,
-            metadata={"need_retry": need_retry},
+        # 存入 context
+        context.set(
+            "reflection_result", reflection
         )
-
-        context.set("reflection", result.content)
 
         logger.info(
-            f"[ReflectionAgent] retry={need_retry}"
+            f"[ReflectionAgent] "
+            f"retry={reflection.need_retry} "
+            f"cause={reflection.root_cause}"
+        )
+
+        # 兼容旧接口
+        agent_result = AgentResult(
+            success=not reflection.need_retry,
+            content=reflection.suggestion,
+            metadata={
+                "need_retry": (
+                    reflection.need_retry
+                ),
+                "root_cause": (
+                    reflection.root_cause
+                ),
+            },
+        )
+        context.set(
+            "reflection", reflection.suggestion
         )
 
         await event_bus.publish(
@@ -86,34 +152,27 @@ reason: <one sentence explanation>
             {"agent": "reflection"},
         )
 
-        return result
+        return reflection
 
     async def save_learning(
-        self, task, reason, need_retry
+        self,
+        task: str,
+        reflection: ReflectionResult,
     ):
-
         memory_type = (
             "success"
-            if not need_retry
+            if not reflection.need_retry
             else "failure"
         )
 
-        summary_prompt = f"""
-Summarize this experience in one sentence.
-
-Task: {task}
-Feedback: {reason}
-Outcome: {memory_type}
-
-Return one sentence of knowledge.
-"""
-
-        knowledge = await asyncio.to_thread(
-            self.llm.invoke, summary_prompt
+        summary = (
+            f"Task: {task[:80]} | "
+            f"Cause: {reflection.root_cause} | "
+            f"Fix: {reflection.suggestion}"
         )
 
         await self.memory_repo.add_memory(
-            content=knowledge.strip(),
-            source="learning",
+            content=summary,
+            source="reflection",
             memory_type=memory_type,
         )

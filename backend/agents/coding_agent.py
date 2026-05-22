@@ -1,92 +1,164 @@
+"""
+CodingAgent — 代码生成 + 自动重试 + 异常捕获
+"""
+
 import asyncio
-from backend.agents.base_agent import BaseAgent
-from backend.agents.result import AgentResult
-from backend.executor.context import ExecutionContext
+from dataclasses import dataclass
+
 from backend.utils.logger import logger, log_tokens
-from backend.runtime.event_bus import event_bus
-from backend.runtime.event_types import (
-    AGENT_STARTED,
-    AGENT_COMPLETED,
-)
-from backend.tools.python_runtime import PythonRuntime
+from backend.runtime.runtime_state import state
+from backend.tools.python_sandbox import python_sandbox
+from backend.tools.result import ToolResult
 from backend.llm.provider_factory import get_provider
 
-runtime = PythonRuntime()
 llm = get_provider()
 
 
-class CodingAgent(BaseAgent):
+@dataclass
+class CodingResult:
+    code: str
+    language: str = "python"
+    execution: dict = None
+    success: bool = True
 
-    async def run(
-        self,
-        task: str,
-        context: ExecutionContext,
-    ):
+    def to_dict(self):
+        return {
+            "code": self.code,
+            "language": self.language,
+            "execution": self.execution or {},
+        }
 
-        await event_bus.publish(
-            AGENT_STARTED,
-            {"agent": "coding", "task": task[:50]},
-        )
 
-        logger.info(
-            "[CodingAgent] Generating code..."
-        )
+class CodingAgent:
 
-        research_context = context.get(
-            "research", ""
-        )
+    MAX_RETRIES = 2
 
-        prompt = f"""
+    async def run(self, research_result):
+        attempt = 0
+
+        while attempt <= self.MAX_RETRIES:
+            try:
+                state.agent_status["coding"] = (
+                    "running"
+                )
+                state.timeline.append(
+                    {
+                        "agent": "Coding",
+                        "event": (
+                            f"started "
+                            f"(attempt {attempt + 1})"
+                        ),
+                    }
+                )
+                logger.info(
+                    f"[CodingAgent] Generating, "
+                    f"attempt {attempt + 1}..."
+                )
+
+                # 提取任务描述
+                if isinstance(
+                    research_result, dict
+                ):
+                    task_desc = (
+                        research_result.get(
+                            "summary",
+                            str(research_result),
+                        )
+                    )
+                else:
+                    task_desc = str(
+                        research_result
+                    )
+
+                prompt = f"""
 Write Python code based on this task.
 
-Task: {task}
-
-Research result:
-{research_context}
+Task: {task_desc}
 
 Requirements:
-- Write complete, runnable code
+- Complete runnable code
 - Include a print() statement for output
 - Use only standard library
 - Handle errors properly
 
-Return ONLY the Python code.
-No markdown, no explanation.
+Return ONLY Python code.
 """
 
-        code = await asyncio.to_thread(
-            llm.invoke, prompt
-        )
+                code = await asyncio.to_thread(
+                    llm.invoke, prompt
+                )
+                code = self._clean_code(code)
 
-        code = self._clean_code(code)
+                # 执行代码
+                logger.info(
+                    "[CodingAgent] Executing..."
+                )
+                exec_result = (
+                    await python_sandbox.execute(
+                        code
+                    )
+                )
+                log_tokens(250)
 
-        logger.info("[CodingAgent] Executing...")
+                if exec_result.success:
+                    logger.info(
+                        "[CodingAgent] Output: "
+                        + exec_result.content.strip()
+                    )
+                else:
+                    raise RuntimeError(
+                        exec_result.error
+                        or "Execution failed"
+                    )
 
-        execution = await asyncio.to_thread(
-            runtime.execute, code
-        )
+                state.agent_status["coding"] = (
+                    "completed"
+                )
+                state.timeline.append(
+                    {
+                        "agent": "Coding",
+                        "event": "completed",
+                    }
+                )
 
-        log_tokens(250)
+                return CodingResult(
+                    code=code,
+                    execution={
+                        "stdout": (
+                            exec_result.content
+                        ),
+                        "stderr": (
+                            exec_result.error
+                            or ""
+                        ),
+                    },
+                    success=True,
+                )
 
-        logger.info(
-            f"[CodingAgent] Output: "
-            f"{execution['stdout'].strip()}"
-        )
+            except Exception as e:
+                attempt += 1
+                logger.error(
+                    f"[CodingAgent] Error: {e}, "
+                    f"attempt {attempt}"
+                )
 
-        result = AgentResult(
-            success=execution.get("success", False),
-            content=code,
-            metadata={"execution": execution},
-        )
-
-        context.set("coding", result.content)
-
-        await event_bus.publish(
-            AGENT_COMPLETED,
-            {"agent": "coding"},
-        )
-
-        return result
+                if attempt > self.MAX_RETRIES:
+                    state.agent_status["coding"] = (
+                        "failed"
+                    )
+                    state.timeline.append(
+                        {
+                            "agent": "Coding",
+                            "event": "failed",
+                        }
+                    )
+                    return CodingResult(
+                        code="",
+                        execution={
+                            "error": str(e)
+                        },
+                        success=False,
+                    )
 
     def _clean_code(self, code):
         if "```" in code:

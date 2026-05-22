@@ -1,5 +1,8 @@
 from fastapi import APIRouter
 from backend.runtime.runtime_state import state
+from backend.runtime.workflow_state import (
+    workflow_state,
+)
 from backend.storage.repository import (
     TaskRepository,
     WorkflowRepository,
@@ -11,6 +14,7 @@ router = APIRouter()
 task_repo = TaskRepository()
 workflow_repo = WorkflowRepository()
 token_repo = TokenRepository()
+dlq_repo = DLQRepository()
 
 
 @router.get("/dashboard")
@@ -38,17 +42,36 @@ async def dashboard():
         if getattr(t, "retry_count", 0) > 0
     )
 
+    running_workflows = [
+        {
+            "workflow_id": w["workflow_id"],
+            "tasks": w.get("tasks", {}),
+        }
+        for w in workflow_state.list_running()
+    ]
+
     return {
         "total_tasks": total_tasks,
         "completed_tasks": completed_tasks,
         "running_tasks": running_tasks,
         "token_usage": token_usage,
         "workflows": len(workflows),
+        "running_workflows": running_workflows,
         "agents": state.agent_status,
         "dag": state.current_dag,
         "timeline": state.timeline,
+        "dlq_count": await dlq_count(),
         "auto_fix": {
             "retried_tasks": retry_tasks,
+            "success": state.auto_fix_stats[
+                "success"
+            ],
+            "failed": state.auto_fix_stats[
+                "failed"
+            ],
+            "total_retry": state.auto_fix_stats[
+                "total_retry"
+            ],
         },
     }
 
@@ -66,4 +89,5 @@ async def autofix_stats():
 
     return {
         "retried_tasks": retry_tasks,
+        **state.auto_fix_stats,
     }

@@ -1,16 +1,20 @@
+"""
+WorkflowExecutor — 唯一入口
+
+Planner → DAG → Agent → 完成
+"""
+
 import uuid
+
 from backend.agents.planner_agent import PlannerAgent
 from backend.executor.dag_executor import DAGExecutor
-from backend.executor.context import ExecutionContext
-from backend.runtime.event_bus import event_bus
-from backend.runtime.event_types import (
-    WORKFLOW_STARTED,
-    WORKFLOW_COMPLETED,
-)
+from backend.runtime.runtime_state import state
 from backend.storage.repository import (
     TaskRepository,
     WorkflowRepository,
+    MemoryRepository,
 )
+from backend.utils.logger import logger
 
 
 class WorkflowExecutor:
@@ -20,24 +24,18 @@ class WorkflowExecutor:
         self.dag_executor = DAGExecutor()
         self.task_repo = TaskRepository()
         self.workflow_repo = WorkflowRepository()
+        self.memory_repo = MemoryRepository()
 
     async def execute(self, task: str):
-
         workflow_id = str(uuid.uuid4())[:8]
-
-        ctx = ExecutionContext()
-        ctx.set("objective", task)
-
-        await event_bus.publish(
-            WORKFLOW_STARTED,
-            {
-                "workflow_id": workflow_id,
-                "task": task,
-            },
+        logger.info(
+            f"[Workflow] Starting {workflow_id}"
         )
 
-        tasks = await self.planner.run(task, ctx)
+        # Planner 生成 DAG
+        tasks = await self.planner.create_plan(task)
 
+        # 创建 workflow
         await self.workflow_repo.create_workflow(
             workflow_id=workflow_id,
             objective=task,
@@ -47,66 +45,60 @@ class WorkflowExecutor:
             workflow_id, "running"
         )
 
+        # 创建 task 记录
         for t in tasks:
             await self.task_repo.create_task(
-                task_id=(
-                    f"{workflow_id}_{t.task_id}"
-                ),
-                objective=t.payload or t.task_type,
+                f"{workflow_id}_{t.id}", t.type
             )
             await self.task_repo.update_status(
-                f"{workflow_id}_{t.task_id}",
-                "running",
+                f"{workflow_id}_{t.id}", "running"
             )
 
-        # Pass workflow_id to dag_executor
-        await self.dag_executor.execute(
-            tasks,
-            workflow_id=workflow_id,
-        )
+        # 执行 DAG
+        await self.dag_executor.execute(tasks)
 
+        # 更新结果
         completed = 0
         for t in tasks:
-            is_done = t.status == "completed"
-            if is_done:
+            task_key = f"{workflow_id}_{t.id}"
+            status = t.status
+            if status == "completed":
                 completed += 1
-
             await self.task_repo.save_result(
-                f"{workflow_id}_{t.task_id}",
-                str(t.status),
-                duration=t.duration or 0,
+                task_key, str(status)
             )
             await self.task_repo.update_status(
-                f"{workflow_id}_{t.task_id}",
-                "completed"
-                if is_done
-                else "failed",
+                task_key, status
             )
 
+        # 完成 workflow
         await self.workflow_repo.complete_workflow(
             workflow_id=workflow_id,
             completed_tasks=completed,
             token_usage=0,
         )
 
-        await event_bus.publish(
-            WORKFLOW_COMPLETED,
-            {
-                "workflow_id": workflow_id,
-                "completed": completed,
-                "total": len(tasks),
-            },
+        # 保存成功模式
+        if completed == len(tasks):
+            pattern = ", ".join(t.type for t in tasks)
+            await self.memory_repo.add_memory(
+                content=f"Task: {task[:80]} | Pattern: {pattern}",
+                source="workflow",
+                memory_type="success",
+            )
+
+        logger.info(
+            f"[Workflow] {workflow_id} done: "
+            f"{completed}/{len(tasks)}"
         )
 
         return {
             "workflow_id": workflow_id,
             "status": "completed",
+            "completed": completed,
+            "total": len(tasks),
             "tasks": [
-                {
-                    "task_id": t.task_id,
-                    "task_type": t.task_type,
-                    "status": t.status,
-                }
+                {"task_id": t.id, "type": t.type, "status": t.status}
                 for t in tasks
             ],
         }

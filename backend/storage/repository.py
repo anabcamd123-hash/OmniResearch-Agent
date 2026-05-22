@@ -127,6 +127,41 @@ class TaskRepository:
 
             return result.scalars().all()
 
+    async def search_tasks(
+        self, keyword: str, limit=50
+    ):
+        """按 keyword 搜索 task"""
+        from sqlalchemy import or_
+
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                select(TaskRecord)
+                .where(
+                    or_(
+                        TaskRecord.task_id.ilike(
+                            f"%{keyword}%"
+                        ),
+                        TaskRecord.objective.ilike(
+                            f"%{keyword}%"
+                        ),
+                    )
+                )
+                .order_by(
+                    TaskRecord.created_at.desc()
+                )
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            rows = result.scalars().all()
+            return [
+                {
+                    "task_id": r.task_id,
+                    "objective": r.objective,
+                    "status": r.status,
+                }
+                for r in rows
+            ]
+
 
 class WorkflowRepository:
 
@@ -220,6 +255,44 @@ class WorkflowRepository:
             result = await db.execute(stmt)
 
             return result.scalars().all()
+
+    async def search_workflows(
+        self, keyword: str, limit=50
+    ):
+        """按 keyword 搜索 workflow"""
+        from sqlalchemy import or_
+
+        async with AsyncSessionLocal() as db:
+            stmt = (
+                select(WorkflowRecord)
+                .where(
+                    or_(
+                        WorkflowRecord.workflow_id.ilike(
+                            f"%{keyword}%"
+                        ),
+                        WorkflowRecord.objective.ilike(
+                            f"%{keyword}%"
+                        ),
+                    )
+                )
+                .order_by(
+                    WorkflowRecord.created_at.desc()
+                )
+                .limit(limit)
+            )
+            result = await db.execute(stmt)
+            rows = result.scalars().all()
+            return [
+                {
+                    "workflow_id": r.workflow_id,
+                    "objective": r.objective,
+                    "status": r.status,
+                    "total_tasks": r.total_tasks,
+                    "completed_tasks": r.completed_tasks,
+                    "created_at": str(r.created_at),
+                }
+                for r in rows
+            ]
 
 
 class TokenRepository:
@@ -370,6 +443,60 @@ class MemoryRepository:
                 .limit(limit)
             )
 
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "content": r.content,
+                    "memory_type": r.memory_type,
+                    "time": str(r.created_at),
+                }
+                for r in rows
+            ]
+
+    async def search(
+        self,
+        query: str,
+        memory_type: str = None,
+        limit: int = 5,
+    ):
+        """
+        搜索记忆（v1.0: LIKE 匹配）
+        v2.0: RAG 向量检索
+        """
+        from sqlalchemy import or_
+
+        async with AsyncSessionLocal() as db:
+
+            stmt = select(MemoryRecord)
+
+            # 关键词匹配
+            keywords = query.split()
+            conditions = [
+                MemoryRecord.content.ilike(
+                    f"%{kw}%"
+                )
+                for kw in keywords
+                if len(kw) > 2
+            ]
+
+            if conditions:
+                stmt = stmt.where(
+                    or_(*conditions)
+                )
+
+            # 类型过滤
+            if memory_type:
+                stmt = stmt.where(
+                    MemoryRecord.memory_type
+                    == memory_type
+                )
+
+            stmt = stmt.order_by(
+                MemoryRecord.id.desc()
+            ).limit(limit)
+
+            result = await db.execute(stmt)
             rows = result.scalars().all()
 
             return [

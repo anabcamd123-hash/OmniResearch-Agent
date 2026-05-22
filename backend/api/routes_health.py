@@ -46,3 +46,24 @@ async def full_health():
     checks["status"] = "ok"
 
     return checks
+
+
+@router.get("/health/breakers")
+async def breaker_status():
+    """熔断器状态（监控用）"""
+    from backend.tools.router import tool_router
+    return tool_router.get_breaker_status()
+
+
+@router.get("/health/tools")
+async def tool_audit_status():
+    """工具审计统计（监控用）"""
+    from backend.tools.tool_audit import tool_audit
+    return tool_audit.get_stats()
+
+
+@router.get("/health/tools/recent")
+async def tool_recent_calls():
+    """最近工具调用记录"""
+    from backend.tools.tool_audit import tool_audit
+    return tool_audit.get_recent()

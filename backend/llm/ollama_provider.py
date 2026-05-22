@@ -12,6 +12,8 @@ class OllamaProvider(BaseProvider):
 
         self.model = settings.OLLAMA_MODEL
 
+        self.timeout = settings.get_provider_timeout("ollama")
+
     def invoke(
         self,
         prompt: str,
@@ -28,7 +30,7 @@ class OllamaProvider(BaseProvider):
                     "temperature": temperature
                 },
             },
-            timeout=300,
+            timeout=self.timeout,
         )
 
         data = response.json()
@@ -53,7 +55,7 @@ class OllamaProvider(BaseProvider):
                         "temperature": temperature
                     },
                 },
-                timeout=300,
+                timeout=self.timeout,
             ) as response:
                 async for line in response.aiter_lines():
                     if line:

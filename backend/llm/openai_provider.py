@@ -1,8 +1,8 @@
 import os
-import httpx
 from openai import OpenAI
 from typing import AsyncIterator
 from backend.llm.base_provider import BaseProvider
+from backend.config.settings import settings
 
 
 class OpenAIProvider(BaseProvider):
@@ -10,7 +10,8 @@ class OpenAIProvider(BaseProvider):
     def __init__(self):
 
         self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=settings.get_provider_timeout("openai"),
         )
 
     def invoke(

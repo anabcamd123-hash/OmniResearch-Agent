@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 from backend.llm.base_provider import BaseProvider
+from backend.config.settings import settings
 
 
 class DeepSeekProvider(BaseProvider):
@@ -9,7 +10,8 @@ class DeepSeekProvider(BaseProvider):
 
         self.client = OpenAI(
             api_key=os.getenv("DEEPSEEK_API_KEY"),
-            base_url="https://api.deepseek.com"
+            base_url="https://api.deepseek.com",
+            timeout=settings.get_provider_timeout("deepseek"),
         )
 
     def invoke(

@@ -1,6 +1,7 @@
 import os
 import requests
 from backend.llm.base_provider import BaseProvider
+from backend.config.settings import settings
 
 
 class GeminiProvider(BaseProvider):
@@ -14,6 +15,8 @@ class GeminiProvider(BaseProvider):
             "/v1beta/models/gemini-2.0-flash"
             ":generateContent"
         )
+
+        self.timeout = settings.get_provider_timeout("gemini")
 
     def invoke(
         self,
@@ -40,7 +43,9 @@ class GeminiProvider(BaseProvider):
         }
 
         response = requests.post(
-            url, json=payload
+            url,
+            json=payload,
+            timeout=self.timeout,
         )
 
         data = response.json()

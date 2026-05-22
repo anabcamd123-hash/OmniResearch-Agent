@@ -146,3 +146,55 @@ class MemoryRecord(Base):
         DateTime,
         default=datetime.utcnow
     )
+
+
+class DLQTask(Base):
+
+    __tablename__ = "dlq_tasks"
+
+    id = Column(
+        Integer, primary_key=True
+    )
+
+    task_id = Column(
+        String, unique=True,
+        index=True, nullable=False,
+    )
+
+    retries = Column(
+        Integer, default=0
+    )
+
+    timestamp = Column(
+        Float, nullable=False
+    )
+
+
+class AuditLog(Base):
+
+    __tablename__ = "audit_logs"
+
+    id = Column(
+        Integer, primary_key=True, index=True
+    )
+
+    user = Column(
+        String, nullable=False
+    )
+
+    role = Column(
+        String, nullable=False
+    )
+
+    action = Column(
+        String, nullable=False
+    )
+
+    target = Column(
+        String, nullable=True
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

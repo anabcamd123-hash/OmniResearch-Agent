@@ -10,6 +10,14 @@ class ToolError(OmniResearchError):
     pass
 
 
+class ToolTimeoutError(OmniResearchError):
+    pass
+
+
+class CircuitBreakerOpenError(OmniResearchError):
+    pass
+
+
 class AgentError(OmniResearchError):
     pass
 
