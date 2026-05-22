@@ -1,5 +1,7 @@
 """
-WebSocket 路由 — 简洁广播
+WebSocket 后端 — 推送 workflow 状态
+
+每秒推送 timeline + DAG
 """
 
 import asyncio
@@ -14,34 +16,48 @@ from backend.runtime.runtime_state import state
 
 router = APIRouter()
 
-connections: list[WebSocket] = []
+clients: set = set()
 
 
 async def broadcast(message: str):
-    """广播消息给所有连接的客户端"""
-    for conn in list(connections):
+    """广播字符串消息"""
+    for conn in list(clients):
         try:
             await conn.send_text(message)
         except Exception:
-            connections.remove(conn)
+            clients.discard(conn)
+
+
+@router.websocket("/ws/workflows")
+async def workflow_ws(ws: WebSocket):
+    await ws.accept()
+    clients.add(ws)
+    try:
+        while True:
+            await asyncio.sleep(1)
+            data = {
+                "timeline": state.timeline[-50:],
+                "current_dag": state.current_dag,
+                "agent_status": state.agent_status,
+            }
+            dead = set()
+            for client in clients:
+                try:
+                    await client.send_json(data)
+                except Exception:
+                    dead.add(client)
+            clients.difference_update(dead)
+    except Exception:
+        clients.discard(ws)
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(
-    websocket: WebSocket,
-):
-    await websocket.accept()
-    connections.append(websocket)
+async def legacy_ws(ws: WebSocket):
+    """兼容旧路径"""
+    await ws.accept()
+    clients.add(ws)
     try:
         while True:
-            # 推送状态快照
-            await asyncio.sleep(1)
-            snapshot = json.dumps({
-                "type": "state_update",
-                "agent_status": state.agent_status,
-                "current_dag": state.current_dag,
-            })
-            await broadcast(snapshot)
+            await ws.receive_text()
     except (WebSocketDisconnect, Exception):
-        if websocket in connections:
-            connections.remove(websocket)
+        clients.discard(ws)
