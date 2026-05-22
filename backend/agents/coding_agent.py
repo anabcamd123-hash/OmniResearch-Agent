@@ -1,42 +1,49 @@
 """
-CodingAgent — 代码生成 + 自动重试 + 异常捕获
+CodingAgent — 代码生成 + 执行 + 自动重试
+
+LLM 生成代码 → 子进程执行 → 异常捕获
 """
 
 import asyncio
-from dataclasses import dataclass
 
-from backend.utils.logger import logger, log_tokens
 from backend.runtime.runtime_state import state
-from backend.tools.python_sandbox import python_sandbox
-from backend.tools.result import ToolResult
 from backend.llm.provider_factory import get_provider
+from backend.tools.python_sandbox import (
+    python_sandbox,
+)
+from backend.utils.logger import logger
 
 llm = get_provider()
 
+MAX_RETRIES = 2
 
-@dataclass
+
 class CodingResult:
-    code: str
-    language: str = "python"
-    execution: dict = None
-    success: bool = True
+
+    def __init__(
+        self,
+        code: str,
+        execution: dict = None,
+        success: bool = True,
+    ):
+        self.code = code
+        self.execution = execution or {}
+        self.success = success
 
     def to_dict(self):
         return {
             "code": self.code,
-            "language": self.language,
-            "execution": self.execution or {},
+            "execution": self.execution,
+            "success": self.success,
         }
 
 
 class CodingAgent:
 
-    MAX_RETRIES = 2
-
     async def run(self, research_result):
         attempt = 0
 
-        while attempt <= self.MAX_RETRIES:
+        while attempt <= MAX_RETRIES:
             try:
                 state.agent_status["coding"] = (
                     "running"
@@ -51,8 +58,8 @@ class CodingAgent:
                     }
                 )
                 logger.info(
-                    f"[CodingAgent] Generating, "
-                    f"attempt {attempt + 1}..."
+                    f"[Coding] Generating, "
+                    f"attempt {attempt + 1}"
                 )
 
                 # 提取任务描述
@@ -71,13 +78,13 @@ class CodingAgent:
                     )
 
                 prompt = f"""
-Write Python code based on this task.
+Write Python code for this task.
 
 Task: {task_desc}
 
 Requirements:
-- Complete runnable code
-- Include a print() statement for output
+- Complete, runnable code
+- Include print() for output
 - Use only standard library
 - Handle errors properly
 
@@ -89,27 +96,23 @@ Return ONLY Python code.
                 )
                 code = self._clean_code(code)
 
-                # 执行代码
-                logger.info(
-                    "[CodingAgent] Executing..."
-                )
+                # 执行
                 exec_result = (
                     await python_sandbox.execute(
                         code
                     )
                 )
-                log_tokens(250)
 
-                if exec_result.success:
-                    logger.info(
-                        "[CodingAgent] Output: "
-                        + exec_result.content.strip()
-                    )
-                else:
+                if not exec_result.success:
                     raise RuntimeError(
                         exec_result.error
                         or "Execution failed"
                     )
+
+                logger.info(
+                    "[Coding] Output: "
+                    + exec_result.content.strip()
+                )
 
                 state.agent_status["coding"] = (
                     "completed"
@@ -127,10 +130,7 @@ Return ONLY Python code.
                         "stdout": (
                             exec_result.content
                         ),
-                        "stderr": (
-                            exec_result.error
-                            or ""
-                        ),
+                        "stderr": "",
                     },
                     success=True,
                 )
@@ -138,11 +138,11 @@ Return ONLY Python code.
             except Exception as e:
                 attempt += 1
                 logger.error(
-                    f"[CodingAgent] Error: {e}, "
+                    f"[Coding] Error: {e}, "
                     f"attempt {attempt}"
                 )
 
-                if attempt > self.MAX_RETRIES:
+                if attempt > MAX_RETRIES:
                     state.agent_status["coding"] = (
                         "failed"
                     )
@@ -160,7 +160,7 @@ Return ONLY Python code.
                         success=False,
                     )
 
-    def _clean_code(self, code):
+    def _clean_code(self, code: str) -> str:
         if "```" in code:
             lines = code.split("\n")
             code_lines = []
@@ -171,5 +171,5 @@ Return ONLY Python code.
                     continue
                 if in_block:
                     code_lines.append(line)
-            code = "\n".join(code_lines)
+            return "\n".join(code_lines)
         return code

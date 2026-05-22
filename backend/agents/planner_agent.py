@@ -1,147 +1,148 @@
 """
-PlannerAgent - JSON DAG 规划
+PlannerAgent — 任务分解 + DAG 生成
 
-输出 WorkflowPlan，支持并行/依赖/动态规划
-LLM 失败时 fallback 到默认 4 步流水线
+输入任务描述，输出 Task 列表（含依赖关系）
 """
 
-import json
-import asyncio
-
-from backend.agents.planner_schema import (
-    WorkflowPlan,
-    PlanTask,
-)
-from backend.agents.registry import AGENT_REGISTRY
+from backend.executor.task import Task
 from backend.runtime.runtime_state import state
-from backend.utils.logger import logger
 from backend.rag.rag_service import rag_service
 from backend.llm.provider_factory import get_provider
+from backend.utils.logger import logger
 
 llm = get_provider()
 
-# 默认 Plan，保证系统不因 LLM 失败而瘫痪
-DEFAULT_PLAN = WorkflowPlan(
-    tasks=[
-        PlanTask(
-            id="research_1",
-            type="research",
-            depends=[],
-        ),
-        PlanTask(
-            id="coding_1",
-            type="coding",
-            depends=["research_1"],
-        ),
-        PlanTask(
-            id="verify_1",
-            type="verify",
-            depends=["coding_1"],
-        ),
-        PlanTask(
-            id="reflection_1",
-            type="reflection",
-            depends=["verify_1"],
-        ),
-    ]
-)
+
+def build_mermaid(tasks):
+    lines = ["graph TD"]
+    for task in tasks:
+        for dep in task.dependencies:
+            lines.append(f"    {dep} --> {task.task_id}")
+    if not any(t.dependencies for t in tasks):
+        for i in range(len(tasks) - 1):
+            lines.append(
+                f"    {tasks[i].task_id} --> "
+                f"{tasks[i + 1].task_id}"
+            )
+    return "\n".join(lines)
+
+
+# 默认 4 步流水线
+DEFAULT_STEPS = [
+    ("research", "research"),
+    ("coding", "coding"),
+    ("verify", "verify"),
+    ("reflection", "reflection"),
+]
 
 
 class PlannerAgent:
 
-    async def create_plan(
-        self, task: str
-    ) -> list[PlanTask]:
+    async def create_plan(self, task_desc: str):
         state.agent_status["planner"] = "running"
         state.timeline.append(
             {"agent": "Planner", "event": "started"}
         )
         logger.info(
-            f"[Planner] Creating DAG for: {task}"
+            f"[Planner] Creating DAG for: "
+            f"{task_desc[:50]}"
         )
 
+        # 查询历史知识
+        rag_context = ""
         try:
-            rag_context = await rag_service.query(
-                task, top_k=3
+            rag_results = await rag_service.query(
+                task_desc, top_k=3
             )
-            context_text = ""
-            if rag_context:
-                context_text = (
+            if rag_results:
+                rag_context = (
                     "Historical context:\n"
-                    + "\n---\n".join(rag_context)
+                    + "\n---\n".join(rag_results)
                 )
+        except Exception:
+            pass
 
-            # 动态获取可用 agent 类型
-            available = list(AGENT_REGISTRY.keys())
-            types_desc = ", ".join(available)
+        # LLM 生成计划
+        prompt = f"""
+Create a workflow plan for this task.
 
-            prompt = f"""
-Create a JSON workflow plan for this task.
+{rag_context if rag_context else ""}
 
-{context_text if context_text else ""}
+Task: {task_desc}
 
-Task: {task}
+Available agent types:
+- research: Search and gather information
+- coding: Generate and execute code
+- verify: Evaluate result quality
+- reflection: Analyze and suggest improvements
 
-Available types: {types_desc}
+Return ONLY a JSON array of steps:
+[
+  {{"step": "description", "agent": "research"}},
+  {{"step": "description", "agent": "coding"}},
+  ...
+]
 
-Return ONLY valid JSON:
-{{
-  "tasks": [
-    {{"id": "task1", "type": "research", "depends": []}},
-    ...
-  ]
-}}
-
-Requirements:
-- 2-6 steps
-- Unique ids
-- Types from available list only
-- Valid dependencies (no cycles)
+Use 2-5 steps. Each agent type from available list.
 """
 
-            plan_text = await asyncio.to_thread(
-                llm.invoke, prompt
-            )
-            logger.info(
-                f"[Planner] LLM plan:\n"
-                f"{plan_text[:200]}"
-            )
+        try:
+            plan_text = llm.invoke(prompt)
+            import json
 
-            # 清理 markdown 代码块
             text = plan_text.strip()
             if text.startswith("```"):
                 lines = text.split("\n")
                 text = "\n".join(lines[1:-1])
 
-            plan_json = json.loads(text)
-            plan = WorkflowPlan(**plan_json)
+            steps = json.loads(text)
+            if not isinstance(steps, list):
+                raise ValueError("not a list")
 
             # 验证 agent 类型
-            valid = [
-                t
-                for t in plan.tasks
-                if t.type in AGENT_REGISTRY
-            ]
-            if not valid:
-                raise ValueError(
-                    "No valid tasks"
-                )
-            plan = WorkflowPlan(
-                tasks=valid[:6]
-            )
+            valid_types = {
+                "research",
+                "coding",
+                "verify",
+                "reflection",
+            }
+            steps = [
+                s
+                for s in steps
+                if s.get("agent") in valid_types
+            ][:5]
+
+            if not steps:
+                raise ValueError("no valid steps")
 
         except Exception as e:
             logger.warning(
-                f"[Planner] Failed: {e}. "
-                f"Using default plan."
+                f"[Planner] LLM failed: {e}, "
+                f"using default"
             )
-            plan = DEFAULT_PLAN
+            steps = [
+                {"step": s[0], "agent": s[1]}
+                for s in DEFAULT_STEPS
+            ]
 
-        # 更新 DAG 可视化
-        state.current_dag = self.build_mermaid(
-            plan.tasks
-        )
+        # 构建 Task 列表
+        tasks = []
+        for i, step in enumerate(steps):
+            agent_type = step["agent"]
+            deps = (
+                [tasks[i - 1].task_id]
+                if i > 0
+                else []
+            )
+            tasks.append(
+                Task(
+                    task_id=agent_type,
+                    task_type=agent_type,
+                    dependencies=deps,
+                )
+            )
 
+        state.current_dag = build_mermaid(tasks)
         state.agent_status["planner"] = "completed"
         state.timeline.append(
             {
@@ -151,25 +152,7 @@ Requirements:
         )
 
         logger.info(
-            f"[Planner] DAG: {len(plan.tasks)} tasks"
+            f"[Planner] DAG: {len(tasks)} tasks"
         )
 
-        return plan.tasks
-
-    @staticmethod
-    def build_mermaid(
-        tasks: list[PlanTask],
-    ) -> str:
-        lines = ["graph TD"]
-        for task in tasks:
-            for dep in task.depends:
-                lines.append(
-                    f"    {dep} --> {task.id}"
-                )
-        if not any(t.depends for t in tasks):
-            for i in range(len(tasks) - 1):
-                lines.append(
-                    f"    {tasks[i].id} --> "
-                    f"{tasks[i + 1].id}"
-                )
-        return "\n".join(lines)
+        return tasks

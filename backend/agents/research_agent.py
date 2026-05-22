@@ -1,93 +1,98 @@
+"""
+ResearchAgent — 信息检索 + RAG + LLM 总结
+
+自动调工具 + 查询历史 + 保存经验
+"""
+
 import asyncio
-from backend.agents.base_agent import BaseAgent
-from backend.agents.result import AgentResult
-from backend.executor.context import ExecutionContext
-from backend.utils.logger import logger, log_tokens
-from backend.runtime.event_bus import event_bus
-from backend.runtime.event_types import (
-    AGENT_STARTED,
-    AGENT_COMPLETED,
-)
-from backend.tools.router import tool_router
+
+from backend.runtime.runtime_state import state
 from backend.rag.rag_service import rag_service
+from backend.tools.router import tool_router
 from backend.memory.memory_store import memory
 from backend.llm.provider_factory import get_provider
+from backend.utils.logger import logger
 
 llm = get_provider()
 
 
-class ResearchAgent(BaseAgent):
+class ResearchAgent:
 
-    async def run(
-        self,
-        task: str,
-        context: ExecutionContext,
-    ):
-
-        await event_bus.publish(
-            AGENT_STARTED,
-            {"agent": "research", "task": task},
+    async def run(self, task_desc: str):
+        state.agent_status["research"] = "running"
+        state.timeline.append(
+            {
+                "agent": "Research",
+                "event": "started",
+            }
         )
-
         logger.info(
-            "[ResearchAgent] Analyzing..."
+            f"[Research] Analyzing: "
+            f"{task_desc[:50]}"
         )
 
-        tool_result = await tool_router.execute(task)
+        # 工具调用
+        tool_result = await tool_router.execute(
+            task_desc
+        )
 
-        rag_context = ""
+        # 查询历史知识
+        rag_results = []
         try:
             rag_results = await rag_service.query(
-                task, top_k=3
+                task_desc, top_k=3
             )
-            if rag_results:
-                rag_context = (
-                    "Historical context:\n"
-                    + "\n---\n".join(rag_results)
-                )
         except Exception:
             pass
 
-        summary = await asyncio.to_thread(
-            llm.invoke,
-            f"""
-Summarize the following research results.
+        context_text = (
+            "\n---\n".join(rag_results)
+            if rag_results
+            else ""
+        )
 
-Task: {task}
+        # LLM 生成总结
+        prompt = f"""
+Summarize the research results.
 
-Tool Result:
-{tool_result}
+Task: {task_desc}
+Tool Result: {tool_result}
+{f"Historical Context: {context_text}" if context_text else ""}
 
-{rag_context if rag_context else ""}
-
-Provide a concise summary (2-3 sentences).
+Return 2-3 sentences summary.
 """
+
+        summary = await asyncio.to_thread(
+            llm.invoke, prompt
         )
 
-        result = AgentResult(
-            success=True,
-            content=summary,
-            metadata={
-                "tool_result": tool_result,
-                "rag_context": rag_context,
-            },
+        # 保存经验
+        try:
+            await memory.add(
+                {
+                    "summary": summary,
+                    "task": task_desc,
+                },
+                source="research",
+            )
+            await rag_service.add(summary)
+        except Exception:
+            pass
+
+        state.agent_status["research"] = (
+            "completed"
+        )
+        state.timeline.append(
+            {
+                "agent": "Research",
+                "event": "completed",
+            }
         )
 
-        context.set("research", result.content)
+        logger.info("[Research] Completed")
 
-        await memory.add(
-            result.to_dict(), source="research"
-        )
-        await rag_service.add(summary)
-        log_tokens(120)
-
-        logger.info(
-            "[ResearchAgent] Completed"
-        )
-
-        await event_bus.publish(
-            AGENT_COMPLETED,
-            {"agent": "research"},
-        )
-
-        return result
+        return {
+            "summary": summary,
+            "tool_result": str(tool_result),
+            "rag_context": context_text,
+        }
