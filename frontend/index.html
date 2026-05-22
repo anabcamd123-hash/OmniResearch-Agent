@@ -152,6 +152,7 @@
     <div id="taskModal">
         <div class="modal-header">
             <h3 id="modalTitle">Task Output</h3>
+            <span id="realtimeLabel" style="margin-right:10px;font-size:.8em;color:#38bdf8;display:none">● Live</span>
             <button class="modal-close" onclick="closeModal()">×</button>
         </div>
         <div class="modal-meta" id="modalMeta"></div>
@@ -319,21 +320,41 @@
 
             if (info) {
                 updateModalContent(info);
+
+                // Auto last page for completed/failed
+                const status = (info.status || '').toLowerCase();
+                if (status === 'completed' || status === 'failed') {
+                    currentPage = outputPages.length - 1;
+                }
             } else {
                 document.getElementById('modalMeta').innerHTML = '<span>No data yet</span>';
                 document.getElementById('modalBody').textContent = 'Task has no data yet.';
                 outputPages = [];
             }
 
+            renderPage();
             document.getElementById('taskModal').classList.add('visible');
             document.getElementById('modalOverlay').classList.add('visible');
 
-            // Real-time refresh
+            // Real-time refresh: only for running tasks
             if (refreshInterval) clearInterval(refreshInterval);
-            refreshInterval = setInterval(() => {
-                const latest = taskStatus[currentTaskId];
-                if (latest) updateModalContent(latest);
-            }, 1000);
+            const initialStatus = (taskStatus[taskId]?.status || '').toLowerCase();
+            if (initialStatus === 'running') {
+                refreshInterval = setInterval(() => {
+                    const latest = taskStatus[currentTaskId];
+                    if (!latest) return;
+                    updateModalContent(latest);
+
+                    // Stop if completed/failed
+                    const s = (latest.status || '').toLowerCase();
+                    if (s === 'completed' || s === 'failed') {
+                        clearInterval(refreshInterval);
+                        refreshInterval = null;
+                        currentPage = outputPages.length - 1;
+                        renderPage();
+                    }
+                }, 1000);
+            }
         }
 
         function updateModalContent(info) {
@@ -381,14 +402,21 @@
                 body.scrollTop = body.scrollHeight;
             }
 
-            // Task status badge
+            // Task status badge with emoji
             if (currentTaskId && taskStatus[currentTaskId]) {
                 const s = taskStatus[currentTaskId].status || 'unknown';
                 const badge = document.getElementById('taskStatusBadge');
-                badge.textContent = s.toUpperCase();
+                let label = s.toUpperCase();
+                if (s === 'completed') label += ' ✅';
+                else if (s === 'failed') label += ' ❌';
+                badge.textContent = label;
                 badge.style.color = s === 'running' ? '#fbbf24'
                     : s === 'completed' ? '#4ade80'
                     : s === 'failed' ? '#f87171' : '#94a3b8';
+
+                // Realtime label
+                const rtLabel = document.getElementById('realtimeLabel');
+                rtLabel.style.display = s === 'running' ? 'inline' : 'none';
             }
 
             // Save state for this task
