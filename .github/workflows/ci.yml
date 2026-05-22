@@ -23,5 +23,7 @@ jobs:
       - name: Compile check
         run: python -m compileall backend
 
-      - name: Import check
-        run: python -c "from backend.main import app; print('OK')"
+      - name: Unit tests
+        run: |
+          pip install pytest pytest-asyncio
+          pytest tests/ -v --timeout=30

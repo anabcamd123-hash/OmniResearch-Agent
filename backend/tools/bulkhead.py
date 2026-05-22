@@ -17,13 +17,13 @@ class Bulkhead:
     def __init__(self):
         self.semaphores = {
             "github": asyncio.Semaphore(
-                settings.BULKHEAD_GITHUB
+                settings.TOOL_LIMIT_GITHUB
             ),
             "pdf": asyncio.Semaphore(
-                settings.BULKHEAD_PDF
+                settings.TOOL_LIMIT_PDF
             ),
             "rag": asyncio.Semaphore(
-                settings.BULKHEAD_RAG
+                settings.TOOL_LIMIT_RAG
             ),
             "research": asyncio.Semaphore(
                 settings.BULKHEAD_RESEARCH
