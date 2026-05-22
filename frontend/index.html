@@ -160,17 +160,30 @@
             <button id="prevPage" onclick="changePage(-1)">◀ Prev</button>
             <span id="pageInfo">Page 1/1</span>
             <button id="nextPage" onclick="changePage(1)">Next ▶</button>
+            <input type="text" id="searchInput" placeholder="Search..."
+                style="margin-left:10px;padding:4px 8px;border-radius:4px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;font-size:.8em;width:140px"/>
+            <button onclick="downloadOutput()"
+                style="margin-left:6px;background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8em">
+                📥 Save
+            </button>
         </div>
     </div>
 
     <script>
         let token = '', currentRole = '', ws;
         let taskStatus = {};
+        let currentTaskId = '';
 
         // Pagination
         const PAGE_SIZE = 2000;
         let outputPages = [];
         let currentPage = 0;
+
+        // Search
+        let searchKeyword = '';
+
+        // Real-time refresh
+        let refreshInterval = null;
 
         // ── Auth ───────────────────────────
         async function login() {
@@ -288,24 +301,14 @@
 
         // ── Modal + Pagination ─────────────
         function showOutput(taskId) {
+            currentTaskId = taskId;
             const info = taskStatus[taskId];
             document.getElementById('modalTitle').textContent = `Task: ${taskId}`;
+            document.getElementById('searchInput').value = '';
+            searchKeyword = '';
 
             if (info) {
-                const statusCls = info.status === 'running' ? 'tc-running'
-                    : info.status === 'completed' ? 'tc-completed'
-                    : info.status === 'failed' ? 'tc-failed' : 'tc-idle';
-                document.getElementById('modalMeta').innerHTML = `
-                    <span>Status: <b class="tc-status ${statusCls}">${info.status}</b></span>
-                    <span>Agent: <b>${info.agent || '-'}</b></span>
-                    <span>Retries: <b>${info.retries}</b></span>
-                    <span>Duration: <b>${info.duration}s</b></span>
-                `;
-
-                const output = info.output || 'No output yet.';
-                outputPages = paginate(output);
-                currentPage = 0;
-                renderPage();
+                updateModalContent(info);
             } else {
                 document.getElementById('modalMeta').innerHTML = '<span>No data yet</span>';
                 document.getElementById('modalBody').textContent = 'Task has no data yet.';
@@ -314,6 +317,28 @@
 
             document.getElementById('taskModal').classList.add('visible');
             document.getElementById('modalOverlay').classList.add('visible');
+
+            // Real-time refresh
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(() => {
+                const latest = taskStatus[currentTaskId];
+                if (latest) updateModalContent(latest);
+            }, 1000);
+        }
+
+        function updateModalContent(info) {
+            const statusCls = info.status === 'running' ? 'tc-running'
+                : info.status === 'completed' ? 'tc-completed'
+                : info.status === 'failed' ? 'tc-failed' : 'tc-idle';
+            document.getElementById('modalMeta').innerHTML = `
+                <span>Status: <b class="tc-status ${statusCls}">${info.status}</b></span>
+                <span>Agent: <b>${info.agent || '-'}</b></span>
+                <span>Retries: <b>${info.retries}</b></span>
+                <span>Duration: <b>${info.duration}s</b></span>
+            `;
+            const output = info.output || 'No output yet.';
+            outputPages = paginate(output);
+            renderPage();
         }
 
         function paginate(text) {
@@ -325,8 +350,16 @@
         }
 
         function renderPage() {
+            let content = outputPages[currentPage] || '';
+
+            // Highlight search keyword
+            if (searchKeyword) {
+                const regex = new RegExp(`(${escapeRegExp(searchKeyword)})`, 'gi');
+                content = content.replace(regex, '<mark style="background:#fbbf24;color:#000;padding:1px 2px;border-radius:2px">$1</mark>');
+            }
+
             const body = document.getElementById('modalBody');
-            body.innerHTML = marked.parse(outputPages[currentPage] || '');
+            body.innerHTML = marked.parse(content);
             Prism.highlightAllUnder(body);
             document.getElementById('pageInfo').textContent =
                 `Page ${currentPage + 1} / ${outputPages.length}`;
@@ -344,8 +377,36 @@
         function closeModal() {
             document.getElementById('taskModal').classList.remove('visible');
             document.getElementById('modalOverlay').classList.remove('visible');
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
         }
         document.getElementById('modalOverlay').onclick = closeModal;
+
+        // Search
+        function downloadOutput() {
+            if (!outputPages.length) return;
+            const fullContent = outputPages.join('\n\n---\n\n');
+            const blob = new Blob([fullContent], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentTaskId || 'task'}_output.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('searchInput')?.addEventListener('input', (e) => {
+            searchKeyword = e.target.value.trim();
+            renderPage();
+        });
+
+        function escapeRegExp(s) {
+            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
 
         // ── Admin ──────────────────────────
         function startWorkflow() {
