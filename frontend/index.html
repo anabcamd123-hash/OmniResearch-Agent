@@ -156,7 +156,8 @@
         </div>
         <div class="modal-meta" id="modalMeta"></div>
         <div class="modal-body" id="modalBody"></div>
-        <div class="modal-pager">
+        <div class="modal-pager" style="display:flex;align-items:center;gap:8px">
+            <span id="taskStatusBadge" style="font-weight:bold;font-size:.85em"></span>
             <button id="prevPage" onclick="changePage(-1)">◀ Prev</button>
             <span id="pageInfo">Page 1/1</span>
             <button id="nextPage" onclick="changePage(1)">Next ▶</button>
@@ -378,6 +379,16 @@
             // Auto scroll to bottom (like terminal)
             if (!searchKeyword) {
                 body.scrollTop = body.scrollHeight;
+            }
+
+            // Task status badge
+            if (currentTaskId && taskStatus[currentTaskId]) {
+                const s = taskStatus[currentTaskId].status || 'unknown';
+                const badge = document.getElementById('taskStatusBadge');
+                badge.textContent = s.toUpperCase();
+                badge.style.color = s === 'running' ? '#fbbf24'
+                    : s === 'completed' ? '#4ade80'
+                    : s === 'failed' ? '#f87171' : '#94a3b8';
             }
 
             // Save state for this task
