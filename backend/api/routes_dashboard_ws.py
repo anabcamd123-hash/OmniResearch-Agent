@@ -16,6 +16,7 @@ from fastapi import (
 from backend.runtime.runtime_state import state
 from backend.api.routes_auth import verify_token
 from backend.executor.workflow_executor import WorkflowExecutor
+workflow_executor = WorkflowExecutor()
 from backend.storage.repository.audit_repository import (
     audit_repo,
 )
@@ -92,7 +93,7 @@ async def dashboard_ws(websocket: WebSocket):
                         len("start:") :
                     ].strip()
                     asyncio.create_task(
-                        WorkflowExecutor().execute(
+                        await workflow_executor.execute(
                             task_desc, user
                         )
                     )
