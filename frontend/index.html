@@ -173,6 +173,7 @@
         let token = '', currentRole = '', ws;
         let taskStatus = {};
         let currentTaskId = '';
+        let taskModalState = {};
 
         // Pagination
         const PAGE_SIZE = 2000;
@@ -304,8 +305,16 @@
             currentTaskId = taskId;
             const info = taskStatus[taskId];
             document.getElementById('modalTitle').textContent = `Task: ${taskId}`;
-            document.getElementById('searchInput').value = '';
-            searchKeyword = '';
+
+            // Restore saved state
+            if (taskModalState[taskId]) {
+                currentPage = taskModalState[taskId].currentPage || 0;
+                searchKeyword = taskModalState[taskId].searchKeyword || '';
+            } else {
+                currentPage = 0;
+                searchKeyword = '';
+            }
+            document.getElementById('searchInput').value = searchKeyword;
 
             if (info) {
                 updateModalContent(info);
@@ -365,6 +374,20 @@
                 `Page ${currentPage + 1} / ${outputPages.length}`;
             document.getElementById('prevPage').disabled = currentPage <= 0;
             document.getElementById('nextPage').disabled = currentPage >= outputPages.length - 1;
+
+            // Auto scroll to bottom (like terminal)
+            if (!searchKeyword) {
+                body.scrollTop = body.scrollHeight;
+            }
+
+            // Save state for this task
+            if (currentTaskId) {
+                taskModalState[currentTaskId] = {
+                    currentPage,
+                    searchKeyword,
+                    scrollTop: body.scrollTop
+                };
+            }
         }
 
         function changePage(delta) {
