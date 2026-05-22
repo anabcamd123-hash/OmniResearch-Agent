@@ -10,7 +10,7 @@ import time
 from collections import defaultdict
 
 from backend.executor.task_graph import TaskGraph
-from backend.tools.bulkhead import bulkhead
+from backend.runtime.bulkhead import bulkhead
 from backend.runtime.dlq import dlq_push
 from backend.runtime.runtime_state import state
 from backend.agents.registry import get_agent

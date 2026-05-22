@@ -3,10 +3,7 @@ RedisStateRepository — Redis 状态存储
 """
 
 import redis
-
-from backend.storage.state_repository import (
-    StateRepository,
-)
+from backend.storage.state_repository import StateRepository
 from backend.config.settings import settings
 
 
@@ -14,8 +11,7 @@ class RedisStateRepository(StateRepository):
 
     def __init__(self):
         self.client = redis.Redis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
+            settings.REDIS_URL, decode_responses=True
         )
 
     async def get(self, key: str):

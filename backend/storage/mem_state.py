@@ -1,10 +1,8 @@
 """
-MemStateRepository — 内存状态存储（降级兜底）
+MemStateRepository — 内存状态存储（兜底）
 """
 
-from backend.storage.state_repository import (
-    StateRepository,
-)
+from backend.storage.state_repository import StateRepository
 
 
 class MemStateRepository(StateRepository):

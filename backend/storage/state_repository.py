@@ -1,7 +1,5 @@
 """
 StateRepository — 状态存储抽象接口
-
-三种后端自动降级：Redis → SQLite → Memory
 """
 
 from abc import ABC, abstractmethod

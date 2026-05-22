@@ -10,7 +10,7 @@ import traceback
 
 from backend.tools.result import ToolResult
 from backend.tools.tool_audit import tool_audit
-from backend.tools.bulkhead import bulkhead
+from backend.runtime.bulkhead import bulkhead
 from backend.config.settings import settings
 from backend.utils.logger import logger
 
