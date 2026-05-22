@@ -159,6 +159,7 @@
         <div class="modal-body" id="modalBody"></div>
         <div class="modal-pager" style="display:flex;align-items:center;gap:8px">
             <span id="taskStatusBadge" style="font-weight:bold;font-size:.85em"></span>
+            <span id="taskProgress" style="font-weight:bold;font-size:.85em;color:#a78bfa"></span>
             <button id="prevPage" onclick="changePage(-1)">◀ Prev</button>
             <span id="pageInfo">Page 1/1</span>
             <button id="nextPage" onclick="changePage(1)">Next ▶</button>
@@ -404,7 +405,8 @@
 
             // Task status badge with emoji
             if (currentTaskId && taskStatus[currentTaskId]) {
-                const s = taskStatus[currentTaskId].status || 'unknown';
+                const info = taskStatus[currentTaskId];
+                const s = info.status || 'unknown';
                 const badge = document.getElementById('taskStatusBadge');
                 let label = s.toUpperCase();
                 if (s === 'completed') label += ' ✅';
@@ -417,6 +419,13 @@
                 // Realtime label
                 const rtLabel = document.getElementById('realtimeLabel');
                 rtLabel.style.display = s === 'running' ? 'inline' : 'none';
+
+                // Elapsed time + progress
+                const progEl = document.getElementById('taskProgress');
+                const startTime = info.startTime || Date.now();
+                const progress = info.progress || 0;
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                progEl.textContent = `⏱ ${elapsed}s | ${progress}%`;
             }
 
             // Save state for this task

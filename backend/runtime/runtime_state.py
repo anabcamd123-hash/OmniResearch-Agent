@@ -37,13 +37,32 @@ class RuntimeState:
         retries: int = 0,
         agent: str = "",
         duration: float = 0,
+        progress: int = -1,
     ):
+        existing = self.task_status.get(task_id, {})
+
+        # startTime: running 时设，之后保留
+        startTime = existing.get("startTime")
+        if status == "running" and not startTime:
+            startTime = time.time() * 1000  # ms
+
+        # progress: -1 表示自动推算
+        if progress < 0:
+            if status == "completed":
+                progress = 100
+            elif status == "failed":
+                progress = existing.get("progress", 0)
+            else:
+                progress = existing.get("progress", 0)
+
         self.task_status[task_id] = {
             "status": status,
             "output": output,
             "retries": retries,
             "agent": agent,
             "duration": round(duration, 2),
+            "startTime": startTime,
+            "progress": progress,
         }
 
 
