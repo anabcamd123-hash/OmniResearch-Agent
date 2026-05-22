@@ -150,50 +150,83 @@ class WorkflowExecutor:
             await self._update_task(
                 wf_id, "research", "running"
             )
+            state.update_task("research", "running", agent="Research")
             research_result = (
                 await self.research.run(task_desc)
             )
             await self._update_task(
                 wf_id, "research", "completed"
             )
+            state.update_task(
+                "research",
+                "completed",
+                output=str(research_result)[:2000],
+                agent="Research",
+            )
 
             # 3. Coding
             await self._update_task(
                 wf_id, "coding", "running"
             )
+            state.update_task("coding", "running", agent="Coding")
             coding_result = await self.coding.run(
                 research_result
             )
-            await self._update_task(
-                wf_id, "coding",
+            coding_status = (
                 "completed"
                 if coding_result.success
-                else "failed",
+                else "failed"
+            )
+            await self._update_task(
+                wf_id, "coding", coding_status
+            )
+            state.update_task(
+                "coding",
+                coding_status,
+                output=getattr(coding_result, "code", "")[:3000],
+                agent="Coding",
             )
 
             # 4. Verify
             await self._update_task(
                 wf_id, "verify", "running"
             )
+            state.update_task("verify", "running", agent="Verify")
             verify_result = await self.verify.run(
                 coding_result
             )
-            await self._update_task(
-                wf_id, "verify",
+            verify_status = (
                 "completed"
                 if verify_result.passed
-                else "failed",
+                else "failed"
+            )
+            await self._update_task(
+                wf_id, "verify", verify_status
+            )
+            state.update_task(
+                "verify",
+                verify_status,
+                output=getattr(verify_result, "feedback", "")[:2000],
+                agent="Verify",
             )
 
             # 5. Reflection
             await self._update_task(
                 wf_id, "reflection", "running"
             )
+            state.update_task("reflection", "running", agent="Reflection")
             reflection = await self.reflector.run(
                 task_desc, verify_result
             )
             await self._update_task(
                 wf_id, "reflection", "completed"
+            )
+            state.update_task(
+                "reflection",
+                "completed",
+                output=getattr(reflection, "reason", "")[:2000],
+                agent="Reflection",
+                retries=wf.get("retries", 0),
             )
 
             # ── 判定结果 ──────────────────

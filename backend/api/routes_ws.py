@@ -39,6 +39,7 @@ async def workflow_ws(ws: WebSocket):
                 "timeline": state.timeline[-50:],
                 "current_dag": state.current_dag,
                 "agent_status": state.agent_status,
+                "task_status": state.task_status,
             }
             dead = set()
             for client in clients:

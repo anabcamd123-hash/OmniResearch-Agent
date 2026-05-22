@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OmniResearch Workflow Dashboard</title>
+    <title>OmniResearch Dashboard</title>
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
         mermaid.initialize({ startOnLoad: false, theme: 'dark' });
         window.mermaid = mermaid;
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.css" rel="stylesheet"/>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:#0f172a;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;padding:20px}
@@ -18,7 +22,6 @@
         .card{background:#1e293b;padding:20px;border-radius:10px;border:1px solid #334155}
         .card-full{grid-column:1/-1}
 
-        /* Login */
         .login-bar{display:flex;gap:8px;align-items:center;margin-bottom:16px}
         .login-bar input{padding:6px 12px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.85em}
         .btn{background:#2563eb;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.85em}
@@ -30,7 +33,6 @@
         .role-badge{padding:2px 8px;border-radius:10px;font-size:.75em;font-weight:600}
         .role-admin{background:#dc2626;color:#fff}
 
-        /* Agents */
         .agents{display:flex;flex-wrap:wrap;gap:8px}
         .agent-badge{padding:6px 14px;border-radius:20px;font-size:.85em;font-weight:600}
         .agent-idle{background:#475569;color:#cbd5e1}
@@ -39,34 +41,61 @@
         .agent-failed{background:#dc2626;color:#fff}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
 
-        /* DAG */
-        .dag-container{min-height:200px;display:flex;align-items:center;justify-content:center}
+        .dag-container{min-height:250px;display:flex;align-items:center;justify-content:center}
         .dag-placeholder{color:#475569;font-style:italic}
 
-        /* Timeline */
-        .timeline{max-height:400px;overflow-y:auto;font-size:.85em;font-family:monospace}
+        .timeline{max-height:300px;overflow-y:auto;font-size:.85em;font-family:monospace}
         .timeline-item{padding:4px 0;border-bottom:1px solid #0f172a;display:flex;gap:8px}
         .t-agent{color:#38bdf8;min-width:100px}
-        .t-event{color:#94a3b8}
         .t-event-started{color:#fbbf24}
         .t-event-completed{color:#4ade80}
         .t-event-failed{color:#f87171}
 
-        /* Stats */
         .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
         .stat-box{background:#0f172a;padding:16px;border-radius:8px;text-align:center}
         .stat-value{font-size:2em;font-weight:700;color:#38bdf8}
         .stat-label{font-size:.8em;color:#64748b;margin-top:4px}
 
-        /* Admin */
         .admin-bar{display:flex;gap:8px;margin-bottom:12px}
         .admin-bar input{flex:1;padding:8px 12px;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.9em}
+
+        /* Task Details Panel */
+        .task-cards{display:flex;flex-wrap:wrap;gap:8px}
+        .task-card{background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #334155;cursor:pointer;min-width:120px;transition:border-color .2s}
+        .task-card:hover{border-color:#38bdf8}
+        .task-card .tc-name{font-weight:600;font-size:.9em;margin-bottom:4px}
+        .task-card .tc-status{font-size:.8em;padding:2px 8px;border-radius:4px;display:inline-block}
+        .tc-running{background:#92400e;color:#fbbf24}
+        .tc-completed{background:#166534;color:#4ade80}
+        .tc-failed{background:#991b1b;color:#f87171}
+        .tc-idle{background:#334155;color:#94a3b8}
+        .tc-retry{font-size:.75em;color:#f59e0b;margin-top:2px}
+
+        /* Modal */
+        #taskModal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;max-width:900px;max-height:80vh;background:#1e293b;border:1px solid #475569;border-radius:12px;padding:20px;z-index:1000;overflow:hidden;display:none;flex-direction:column}
+        #taskModal.visible{display:flex}
+        .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .modal-header h3{color:#38bdf8;font-size:1.1em}
+        .modal-close{background:none;border:none;color:#94a3b8;font-size:1.4em;cursor:pointer}
+        .modal-close:hover{color:#fff}
+        .modal-meta{display:flex;gap:16px;margin-bottom:12px;font-size:.85em}
+        .modal-meta span{color:#94a3b8}
+        .modal-meta b{color:#e2e8f0}
+        .modal-body{flex:1;overflow-y:auto;background:#0f172a;padding:16px;border-radius:8px;font-size:.9em;line-height:1.6}
+        .modal-body pre{background:transparent;padding:0}
+        .modal-body code{font-size:.85em}
+        .modal-pager{display:flex;gap:8px;align-items:center;margin-top:12px;justify-content:center}
+        .modal-pager button{background:#334155;color:#e2e8f0;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:.8em}
+        .modal-pager button:hover{background:#475569}
+        .modal-pager button:disabled{opacity:.4;cursor:default}
+        .modal-pager span{color:#94a3b8;font-size:.85em}
+        #modalOverlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:999}
+        #modalOverlay.visible{display:block}
     </style>
 </head>
 <body>
     <h1>🐾 OmniResearch Agent</h1>
 
-    <!-- Login -->
     <div class="login-bar" id="loginBar">
         <input id="username" placeholder="Username" value="admin">
         <input id="password" type="password" placeholder="Password" value="admin123">
@@ -79,7 +108,6 @@
         <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
     </div>
 
-    <!-- Stats -->
     <div class="card card-full" style="margin-bottom:16px">
         <div class="stats">
             <div class="stat-box"><div class="stat-value" id="statTotal">-</div><div class="stat-label">Total</div></div>
@@ -90,28 +118,27 @@
     </div>
 
     <div class="grid">
-        <!-- Agent Status -->
         <div class="card">
             <h2>Agent Status</h2>
             <div class="agents" id="agents"></div>
         </div>
-
-        <!-- DAG -->
         <div class="card">
-            <h2>DAG Workflow</h2>
+            <h2>DAG</h2>
             <div class="dag-container" id="dag">
                 <span class="dag-placeholder">Waiting for workflow...</span>
             </div>
         </div>
-
-        <!-- Timeline -->
-        <div class="card">
+        <div class="card card-full">
+            <h2>Tasks (click to view output)</h2>
+            <div class="task-cards" id="taskCards">
+                <span style="color:#475569;font-size:.85em">No tasks yet</span>
+            </div>
+        </div>
+        <div class="card card-full">
             <h2>Timeline</h2>
             <div class="timeline" id="timeline"></div>
         </div>
-
-        <!-- Admin -->
-        <div class="card" id="adminPanel" style="display:none">
+        <div class="card card-full" id="adminPanel" style="display:none">
             <h2>Start Workflow</h2>
             <div class="admin-bar">
                 <input id="workflowInput" placeholder="Describe your task..."/>
@@ -120,8 +147,30 @@
         </div>
     </div>
 
+    <!-- Modal -->
+    <div id="modalOverlay"></div>
+    <div id="taskModal">
+        <div class="modal-header">
+            <h3 id="modalTitle">Task Output</h3>
+            <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-meta" id="modalMeta"></div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-pager">
+            <button id="prevPage" onclick="changePage(-1)">◀ Prev</button>
+            <span id="pageInfo">Page 1/1</span>
+            <button id="nextPage" onclick="changePage(1)">Next ▶</button>
+        </div>
+    </div>
+
     <script>
         let token = '', currentRole = '', ws;
+        let taskStatus = {};
+
+        // Pagination
+        const PAGE_SIZE = 2000;
+        let outputPages = [];
+        let currentPage = 0;
 
         // ── Auth ───────────────────────────
         async function login() {
@@ -163,6 +212,7 @@
                 if (data.agent_status) updateAgents(data.agent_status);
                 if (data.current_dag) updateDAG(data.current_dag);
                 if (data.timeline) updateTimeline(data.timeline);
+                if (data.task_status) { taskStatus = data.task_status; renderTaskCards(); }
             };
             ws.onclose = () => setTimeout(connectWS, 3000);
         }
@@ -180,14 +230,46 @@
             }
         }
 
-        // ── DAG (Mermaid) ──────────────────
+        // ── DAG ────────────────────────────
         let lastDag = '';
         function updateDAG(dag) {
             if (!dag || dag === lastDag) return;
             lastDag = dag;
             const el = document.getElementById('dag');
             el.innerHTML = `<div class="mermaid">${dag}</div>`;
-            try { window.mermaid.run({ nodes: el.querySelectorAll('.mermaid') }); } catch (e) {}
+            try {
+                window.mermaid.run({ nodes: el.querySelectorAll('.mermaid') }).then(() => {
+                    setTimeout(() => {
+                        el.querySelectorAll('.node').forEach(node => {
+                            const title = node.querySelector('title');
+                            if (!title) return;
+                            const taskId = title.textContent.trim();
+                            node.style.cursor = 'pointer';
+                            node.onclick = () => showOutput(taskId);
+                        });
+                    }, 300);
+                });
+            } catch (e) {}
+        }
+
+        // ── Task Cards ─────────────────────
+        function renderTaskCards() {
+            const el = document.getElementById('taskCards');
+            if (!Object.keys(taskStatus).length) {
+                el.innerHTML = '<span style="color:#475569;font-size:.85em">No tasks yet</span>';
+                return;
+            }
+            el.innerHTML = Object.entries(taskStatus).map(([id, info]) => {
+                const cls = info.status === 'running' ? 'tc-running'
+                    : info.status === 'completed' ? 'tc-completed'
+                    : info.status === 'failed' ? 'tc-failed' : 'tc-idle';
+                return `<div class="task-card" onclick="showOutput('${id}')">
+                    <div class="tc-name">${id}</div>
+                    <span class="tc-status ${cls}">${info.status}</span>
+                    ${info.retries > 0 ? `<div class="tc-retry">retry: ${info.retries}</div>` : ''}
+                    ${info.duration > 0 ? `<div class="tc-retry">${info.duration}s</div>` : ''}
+                </div>`;
+            }).join('');
         }
 
         // ── Timeline ───────────────────────
@@ -196,8 +278,7 @@
             el.innerHTML = timeline.slice(-30).reverse().map(t => {
                 const cls = t.event?.includes('started') ? 't-event-started'
                     : t.event?.includes('completed') ? 't-event-completed'
-                    : t.event?.includes('failed') ? 't-event-failed'
-                    : 't-event';
+                    : t.event?.includes('failed') ? 't-event-failed' : '';
                 return `<div class="timeline-item">
                     <span class="t-agent">${t.agent || ''}</span>
                     <span class="${cls}">${t.event || ''}</span>
@@ -205,7 +286,68 @@
             }).join('');
         }
 
-        // ── Admin: Start Workflow ──────────
+        // ── Modal + Pagination ─────────────
+        function showOutput(taskId) {
+            const info = taskStatus[taskId];
+            document.getElementById('modalTitle').textContent = `Task: ${taskId}`;
+
+            if (info) {
+                const statusCls = info.status === 'running' ? 'tc-running'
+                    : info.status === 'completed' ? 'tc-completed'
+                    : info.status === 'failed' ? 'tc-failed' : 'tc-idle';
+                document.getElementById('modalMeta').innerHTML = `
+                    <span>Status: <b class="tc-status ${statusCls}">${info.status}</b></span>
+                    <span>Agent: <b>${info.agent || '-'}</b></span>
+                    <span>Retries: <b>${info.retries}</b></span>
+                    <span>Duration: <b>${info.duration}s</b></span>
+                `;
+
+                const output = info.output || 'No output yet.';
+                outputPages = paginate(output);
+                currentPage = 0;
+                renderPage();
+            } else {
+                document.getElementById('modalMeta').innerHTML = '<span>No data yet</span>';
+                document.getElementById('modalBody').textContent = 'Task has no data yet.';
+                outputPages = [];
+            }
+
+            document.getElementById('taskModal').classList.add('visible');
+            document.getElementById('modalOverlay').classList.add('visible');
+        }
+
+        function paginate(text) {
+            const pages = [];
+            for (let i = 0; i < text.length; i += PAGE_SIZE) {
+                pages.push(text.slice(i, i + PAGE_SIZE));
+            }
+            return pages.length ? pages : [''];
+        }
+
+        function renderPage() {
+            const body = document.getElementById('modalBody');
+            body.innerHTML = marked.parse(outputPages[currentPage] || '');
+            Prism.highlightAllUnder(body);
+            document.getElementById('pageInfo').textContent =
+                `Page ${currentPage + 1} / ${outputPages.length}`;
+            document.getElementById('prevPage').disabled = currentPage <= 0;
+            document.getElementById('nextPage').disabled = currentPage >= outputPages.length - 1;
+        }
+
+        function changePage(delta) {
+            const next = currentPage + delta;
+            if (next < 0 || next >= outputPages.length) return;
+            currentPage = next;
+            renderPage();
+        }
+
+        function closeModal() {
+            document.getElementById('taskModal').classList.remove('visible');
+            document.getElementById('modalOverlay').classList.remove('visible');
+        }
+        document.getElementById('modalOverlay').onclick = closeModal;
+
+        // ── Admin ──────────────────────────
         function startWorkflow() {
             if (currentRole !== 'admin') return;
             const desc = document.getElementById('workflowInput').value;
