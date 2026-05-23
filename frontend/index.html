@@ -503,6 +503,318 @@
         }
         setInterval(fetchStats, 3000);
         fetchStats();
+
+        /********************************************
+         * 九个优化模块 — 可独立启用/禁用
+         * 修改 MODULES_ENABLED 对象开关对应功能
+         ********************************************/
+        const MODULES_ENABLED = {
+            sort: true,           // 3. 任务排序/筛选
+            searchHistory: true,  // 4. 搜索历史
+            virtualScroll: true,  // 5. 虚拟滚动
+            multiTask: true,      // 6. 多任务切换
+            websocket: false,     // 7. WebSocket 增强（默认关闭，需配置）
+            chart: true,          // 8. 进度图表
+            exportPDF: true       // 9. 导出 PDF
+        };
+
+        // ── 模块 3: 任务排序/筛选 ──────────
+        const SortModule = {
+            enabled: MODULES_ENABLED.sort,
+            init() {
+                if (!this.enabled) return;
+                // 在 modal-pager 区域添加排序按钮
+                const pager = document.querySelector('.modal-pager');
+                if (pager && !document.getElementById('sortToggle')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'sortToggle';
+                    btn.textContent = '🔀 Sort';
+                    btn.style.cssText = 'background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8em';
+                    btn.onclick = () => this.togglePanel();
+                    pager.appendChild(btn);
+                }
+            },
+            togglePanel() {
+                let panel = document.getElementById('sortPanel');
+                if (!panel) {
+                    panel = document.createElement('div');
+                    panel.id = 'sortPanel';
+                    panel.style.cssText = 'background:#0f172a;padding:12px;border-radius:6px;margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+                    panel.innerHTML = `
+                        <select id="sortField" style="padding:4px;border-radius:4px;background:#1e293b;color:#e2e8f0;border:1px solid #475569">
+                            <option value="status">Status</option>
+                            <option value="name">Name</option>
+                            <option value="duration">Duration</option>
+                        </select>
+                        <select id="sortOrder" style="padding:4px;border-radius:4px;background:#1e293b;color:#e2e8f0;border:1px solid #475569">
+                            <option value="asc">Asc</option>
+                            <option value="desc">Desc</option>
+                        </select>
+                        <select id="filterStatus" style="padding:4px;border-radius:4px;background:#1e293b;color:#e2e8f0;border:1px solid #475569">
+                            <option value="all">All</option>
+                            <option value="running">Running</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                        <button onclick="SortModule.apply()" style="background:#2563eb;color:#fff;border:none;padding:4px 10px;border-radius:4px;cursor:pointer">Apply</button>
+                    `;
+                    document.getElementById('taskModal').appendChild(panel);
+                }
+                panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+            },
+            apply() {
+                const field = document.getElementById('sortField').value;
+                const order = document.getElementById('sortOrder').value;
+                const filter = document.getElementById('filterStatus').value;
+                // 排序逻辑应用于 taskStatus
+                const entries = Object.entries(taskStatus);
+                let filtered = filter === 'all' ? entries : entries.filter(([_, t]) => (t.status || '').toLowerCase() === filter);
+                filtered.sort(([idA, a], [idB, b]) => {
+                    let va, vb;
+                    if (field === 'status') { va = a.status || ''; vb = b.status || ''; }
+                    else if (field === 'name') { va = idA; vb = idB; }
+                    else if (field === 'duration') { va = a.duration || 0; vb = b.duration || 0; }
+                    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+                    return order === 'asc' ? cmp : -cmp;
+                });
+                renderTaskCards();
+                console.log('[Sort] Applied:', field, order, filter);
+            }
+        };
+
+        // ── 模块 4: 搜索历史 ──────────────
+        const SearchHistoryModule = {
+            enabled: MODULES_ENABLED.searchHistory,
+            storageKey: 'omniresearch_search_history',
+            maxHistory: 20,
+            history: [],
+            init() {
+                if (!this.enabled) return;
+                this.load();
+                const input = document.getElementById('searchInput');
+                if (input) {
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && searchKeyword) {
+                            this.add(searchKeyword);
+                        }
+                    });
+                    // 双击显示历史
+                    input.addEventListener('dblclick', () => this.showPanel());
+                }
+            },
+            load() {
+                try { this.history = JSON.parse(localStorage.getItem(this.storageKey) || '[]'); } catch { this.history = []; }
+            },
+            save() {
+                localStorage.setItem(this.storageKey, JSON.stringify(this.history));
+            },
+            add(keyword) {
+                if (!keyword.trim()) return;
+                this.history = [keyword, ...this.history.filter(k => k !== keyword)].slice(0, this.maxHistory);
+                this.save();
+            },
+            showPanel() {
+                let panel = document.getElementById('searchHistoryPanel');
+                if (!panel) {
+                    panel = document.createElement('div');
+                    panel.id = 'searchHistoryPanel';
+                    panel.style.cssText = 'position:absolute;background:#1e293b;border:1px solid #475569;border-radius:6px;padding:8px;max-height:200px;overflow-y:auto;z-index:1001;min-width:200px';
+                    document.getElementById('searchInput').parentNode.style.position = 'relative';
+                    document.getElementById('searchInput').parentNode.appendChild(panel);
+                }
+                panel.innerHTML = this.history.map(k =>
+                    `<div style="padding:4px 8px;cursor:pointer;border-radius:4px;font-size:.85em" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('searchInput').value='${k}';searchKeyword='${k}';renderPage();document.getElementById('searchHistoryPanel').style.display='none'">${k}</div>`
+                ).join('') || '<div style="color:#475569;font-size:.85em">No history</div>';
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'block';
+            }
+        };
+
+        // ── 模块 5: 虚拟滚动 ──────────────
+        const VirtualScrollModule = {
+            enabled: MODULES_ENABLED.virtualScroll,
+            active: false,
+            lineHeight: 20,
+            init() {
+                if (!this.enabled) return;
+                const pager = document.querySelector('.modal-pager');
+                if (pager && !document.getElementById('virtualToggle')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'virtualToggle';
+                    btn.textContent = '⚡ Virtual';
+                    btn.style.cssText = 'background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8em';
+                    btn.onclick = () => this.toggle();
+                    pager.appendChild(btn);
+                }
+            },
+            toggle() {
+                this.active = !this.active;
+                document.getElementById('virtualToggle').style.background = this.active ? '#2563eb' : '#334155';
+                renderPage();
+            },
+            render(content) {
+                const body = document.getElementById('modalBody');
+                const lines = content.split('\n');
+                const totalHeight = lines.length * this.lineHeight;
+                body.innerHTML = `<div style="height:${totalHeight}px;position:relative"></div>`;
+                const container = body.querySelector('div');
+                const scrollTop = body.scrollTop;
+                const viewHeight = body.clientHeight;
+                const startIdx = Math.floor(scrollTop / this.lineHeight);
+                const endIdx = Math.min(lines.length, startIdx + Math.ceil(viewHeight / this.lineHeight) + 5);
+                for (let i = startIdx; i < endIdx; i++) {
+                    const div = document.createElement('div');
+                    div.style.cssText = `position:absolute;top:${i * this.lineHeight}px;left:0;right:0;white-space:pre-wrap`;
+                    div.textContent = lines[i] || '';
+                    container.appendChild(div);
+                }
+                body.onscroll = () => this.render(content);
+            }
+        };
+
+        // ── 模块 6: 多任务切换 ──────────────
+        const MultiTaskModule = {
+            enabled: MODULES_ENABLED.multiTask,
+            init() {
+                if (!this.enabled) return;
+                // 点击 taskCard 时已自动调用 showOutput，无需额外处理
+                // 添加快速切换快捷键
+                document.addEventListener('keydown', (e) => {
+                    if (!document.getElementById('taskModal').classList.contains('visible')) return;
+                    if (e.altKey && e.key === 'ArrowRight') this.nextTask();
+                    if (e.altKey && e.key === 'ArrowLeft') this.prevTask();
+                });
+            },
+            getTaskIds() { return Object.keys(taskStatus); },
+            nextTask() {
+                const ids = this.getTaskIds();
+                const idx = ids.indexOf(currentTaskId);
+                if (idx >= 0 && idx < ids.length - 1) showOutput(ids[idx + 1]);
+            },
+            prevTask() {
+                const ids = this.getTaskIds();
+                const idx = ids.indexOf(currentTaskId);
+                if (idx > 0) showOutput(ids[idx - 1]);
+            }
+        };
+
+        // ── 模块 7: WebSocket 增强 ──────────
+        const WebSocketEnhancedModule = {
+            enabled: MODULES_ENABLED.websocket,
+            reconnectAttempts: 0,
+            maxReconnect: 10,
+            init() {
+                if (!this.enabled) return;
+                // 增强现有 WebSocket 连接
+                // 可在此添加心跳、重连策略等
+                console.log('[WS-Enhanced] Module loaded (configurable)');
+            }
+        };
+
+        // ── 模块 8: 进度图表 ──────────────
+        const ChartModule = {
+            enabled: MODULES_ENABLED.chart,
+            history: [],
+            init() {
+                if (!this.enabled) return;
+                const pager = document.querySelector('.modal-pager');
+                if (pager && !document.getElementById('chartToggle')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'chartToggle';
+                    btn.textContent = '📊 Chart';
+                    btn.style.cssText = 'background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8em';
+                    btn.onclick = () => this.toggle();
+                    pager.appendChild(btn);
+                }
+            },
+            record(progress) {
+                this.history.push({ time: Date.now(), progress });
+                if (this.history.length > 100) this.history.shift();
+            },
+            toggle() {
+                let panel = document.getElementById('chartPanel');
+                if (!panel) {
+                    panel = document.createElement('div');
+                    panel.id = 'chartPanel';
+                    panel.style.cssText = 'background:#0f172a;padding:12px;border-radius:6px;margin-top:8px';
+                    panel.innerHTML = '<canvas id="progressChart" width="800" height="150"></canvas>';
+                    document.getElementById('taskModal').appendChild(panel);
+                }
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+                if (panel.style.display === 'block') this.draw();
+            },
+            draw() {
+                const canvas = document.getElementById('progressChart');
+                if (!canvas || this.history.length < 2) return;
+                const ctx = canvas.getContext('2d');
+                const w = canvas.width, h = canvas.height;
+                ctx.clearRect(0, 0, w, h);
+                // Grid
+                ctx.strokeStyle = '#334155';
+                for (let i = 0; i <= 4; i++) {
+                    const y = h - (h * i / 4);
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                }
+                // Line
+                const maxT = this.history[this.history.length - 1].time;
+                const minT = this.history[0].time;
+                const range = maxT - minT || 1;
+                ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.beginPath();
+                this.history.forEach((p, i) => {
+                    const x = ((p.time - minT) / range) * w;
+                    const y = h - (p.progress / 100) * h;
+                    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                // Dot
+                const last = this.history[this.history.length - 1];
+                const lx = w, ly = h - (last.progress / 100) * h;
+                ctx.fillStyle = '#f87171'; ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#e2e8f0'; ctx.font = '12px sans-serif'; ctx.fillText(last.progress + '%', lx - 30, ly - 8);
+            }
+        };
+
+        // ── 模块 9: 导出 PDF ──────────────
+        const ExportModule = {
+            enabled: MODULES_ENABLED.exportPDF,
+            init() {
+                if (!this.enabled) return;
+                const pager = document.querySelector('.modal-pager');
+                if (pager && !document.getElementById('pdfBtn')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'pdfBtn';
+                    btn.textContent = '📄 PDF';
+                    btn.style.cssText = 'background:#334155;color:#e2e8f0;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.8em';
+                    btn.onclick = () => this.exportPDF();
+                    pager.appendChild(btn);
+                }
+            },
+            exportPDF() {
+                if (!this.enabled) return;
+                const content = document.getElementById('modalBody').innerHTML;
+                const win = window.open('', '_blank');
+                win.document.write(`
+                    <html><head><title>${currentTaskId} - Export</title>
+                    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.css" rel="stylesheet"/>
+                    <style>body{font-family:monospace;padding:20px;white-space:pre-wrap;background:#1e293b;color:#e2e8f0}</style>
+                    </head><body>${content}</body></html>
+                `);
+                win.document.close();
+                win.print();
+            }
+        };
+
+        // ── 初始化所有模块 ─────────────────
+        function initModules() {
+            SortModule.init();
+            SearchHistoryModule.init();
+            VirtualScrollModule.init();
+            MultiTaskModule.init();
+            WebSocketEnhancedModule.init();
+            ChartModule.init();
+            ExportModule.init();
+            console.log('[Modules] All 9 modules initialized');
+        }
+        initModules();
     </script>
 </body>
 </html>
