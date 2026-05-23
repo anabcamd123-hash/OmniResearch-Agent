@@ -49,7 +49,7 @@ class CircuitBreaker:
 
 
 circuit_breaker = CircuitBreaker(
-    threshold=settings.CIRCUIT_BREAKER_THRESHOLD,
+    threshold=settings.BREAKER_THRESHOLD,
     timeout=settings.BREAKER_RECOVERY_TIME,
 )
 

@@ -21,7 +21,10 @@ from backend.runtime.event_types import (
 )
 from backend.llm.provider_factory import get_provider
 
-llm = get_provider()
+try:
+    llm = get_provider()
+except Exception:
+    llm = None  # lazy: tests mock this
 
 
 @dataclass

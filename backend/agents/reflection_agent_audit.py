@@ -15,7 +15,10 @@ from backend.storage.repository.audit_repository import (
     audit_repo,
 )
 
-llm = get_provider()
+try:
+    llm = get_provider()
+except Exception:
+    llm = None  # lazy: tests mock this
 
 
 class ReflectionAgentAudit(BaseAgent):

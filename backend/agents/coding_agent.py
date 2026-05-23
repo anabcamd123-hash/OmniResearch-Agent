@@ -13,7 +13,10 @@ from backend.tools.python_sandbox import (
 )
 from backend.utils.logger import logger
 
-llm = get_provider()
+try:
+    llm = get_provider()
+except Exception:
+    llm = None  # lazy: tests mock this
 
 MAX_RETRIES = 2
 

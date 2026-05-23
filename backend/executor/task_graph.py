@@ -20,6 +20,7 @@ class TaskGraph:
             t
             for t in self.tasks
             if t.status == "pending"
+            and t.task_id not in completed
             and t.is_ready(completed)
         ]
 

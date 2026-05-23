@@ -28,7 +28,7 @@ class ToolRouter:
     def __init__(self):
 
         self.registry = registry
-        self.llm = get_provider()
+        self._llm = None  # lazy init
 
         # Circuit Breaker per tool
         self.breakers: dict[str, CircuitBreaker] = {}
@@ -67,7 +67,9 @@ class ToolRouter:
             f"(github/pdf/web/rag)."
         )
 
-        tool_name = self.llm.invoke(prompt)
+        if self._llm is None:
+            self._llm = get_provider()
+        tool_name = self._llm.invoke(prompt)
         tool_name = tool_name.strip().lower()
 
         if tool_name not in self.registry.tools:

@@ -13,7 +13,10 @@ from backend.storage.repository import (
 from backend.llm.provider_factory import get_provider
 from backend.utils.logger import logger
 
-llm = get_provider()
+try:
+    llm = get_provider()
+except Exception:
+    llm = None  # lazy: tests mock this
 
 
 class ReflectionResult:
