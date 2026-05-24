@@ -212,6 +212,9 @@
                 b.textContent = currentRole;
                 b.className = `role-badge role-${currentRole}`;
                 if (currentRole === 'admin') document.getElementById('adminPanel').style.display = 'block';
+                // 登录后重连 WebSocket（带 token）
+                if (ws) ws.close();
+                connectWS();
             } catch (e) { document.getElementById('loginStatus').textContent = '❌ Error'; }
         }
         function logout() {
@@ -223,9 +226,12 @@
 
         // ── WebSocket ──────────────────────
         function connectWS() {
-            ws = new WebSocket(`ws://${location.host}/ws/workflows`);
+            const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const tk = token ? `&access_token=${token}` : '';
+            ws = new WebSocket(`${proto}//${location.host}/ws/dashboard?_=${Date.now()}${tk}`);
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                if (data.log) { console.log('[WS]', data.log); }
                 if (data.agent_status) updateAgents(data.agent_status);
                 if (data.current_dag) updateDAG(data.current_dag);
                 if (data.timeline) updateTimeline(data.timeline);
