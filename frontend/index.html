@@ -108,6 +108,14 @@
         <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
     </div>
 
+    <!-- Admin Panel - 放在顶部显眼位置 -->
+    <div class="card card-full" id="adminPanel" style="display:none;margin-bottom:16px">
+        <div style="display:flex;gap:8px;align-items:center">
+            <input id="workflowInput" placeholder="Describe your task..." style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:.95em"/>
+            <button class="btn btn-green" onclick="startWorkflow()" style="padding:10px 20px;font-size:1em">▶ Run</button>
+        </div>
+    </div>
+
     <div class="card card-full" style="margin-bottom:16px">
         <div class="stats">
             <div class="stat-box"><div class="stat-value" id="statTotal">-</div><div class="stat-label">Total</div></div>
@@ -138,13 +146,7 @@
             <h2>Timeline</h2>
             <div class="timeline" id="timeline"></div>
         </div>
-        <div class="card card-full" id="adminPanel" style="display:none">
-            <h2>Start Workflow</h2>
-            <div class="admin-bar">
-                <input id="workflowInput" placeholder="Describe your task..."/>
-                <button class="btn btn-green" onclick="startWorkflow()">▶ Run</button>
-            </div>
-        </div>
+
     </div>
 
     <!-- Modal -->
