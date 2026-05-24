@@ -12,6 +12,8 @@ ToolRouter - 路由选择 + 通过 Sandbox 执行
   ✓ 熔断器
 """
 
+import asyncio
+
 from backend.tools.registry import registry
 from backend.tools.sandbox import sandbox
 from backend.tools.result import ToolResult
@@ -69,7 +71,9 @@ class ToolRouter:
 
         if self._llm is None:
             self._llm = get_provider()
-        tool_name = self._llm.invoke(prompt)
+        tool_name = await asyncio.to_thread(
+            self._llm.invoke, prompt
+        )
         tool_name = tool_name.strip().lower()
 
         if tool_name not in self.registry.tools:

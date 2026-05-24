@@ -4,6 +4,8 @@ PlannerAgent — 任务分解 + DAG 生成
 输入任务描述，输出 Task 列表（含依赖关系）
 """
 
+import asyncio
+
 from backend.executor.task import Task
 from backend.runtime.runtime_state import state
 from backend.rag.rag_service import rag_service
@@ -90,7 +92,9 @@ Use 2-5 steps. Each agent type from available list.
 """
 
         try:
-            plan_text = llm.invoke(prompt)
+            plan_text = await asyncio.to_thread(
+                llm.invoke, prompt
+            )
             import json
 
             text = plan_text.strip()
