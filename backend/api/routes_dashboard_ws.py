@@ -136,6 +136,9 @@ async def dashboard_ws(websocket: WebSocket):
                     "auto_fix_stats": (
                         state.auto_fix_stats
                     ),
+                    "task_status": (
+                        state.task_status
+                    ),
                 }
             )
             await websocket.send_text(message)
