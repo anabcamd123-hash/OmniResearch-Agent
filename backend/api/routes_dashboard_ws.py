@@ -91,8 +91,8 @@ async def dashboard_ws(websocket: WebSocket):
                         len("start:") :
                     ].strip()
                     asyncio.create_task(
-                        await workflow_executor.execute(
-                            task_desc, user
+                        workflow_executor.execute(
+                            task_desc
                         )
                     )
                     await websocket.send_text(
