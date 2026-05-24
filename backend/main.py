@@ -3,6 +3,8 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from backend.api.routes_task import router as task_router
 from backend.api.routes_ws import router as ws_router
@@ -64,6 +66,12 @@ app.include_router(auth_router)
 app.include_router(export_router)
 app.include_router(task_retry_router)
 app.include_router(audit_router)
+
+
+# ── Frontend 静态文件 ──
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+if FRONTEND_DIR.is_dir():
+    app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
 
 
 @app.on_event("startup")
