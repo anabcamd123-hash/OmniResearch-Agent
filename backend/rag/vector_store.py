@@ -44,3 +44,6 @@ class VectorStore:
             self.index.d
         )
         self.texts = []
+
+
+vector_store = VectorStore()

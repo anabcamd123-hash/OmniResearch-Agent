@@ -17,9 +17,7 @@ from backend.runtime.runtime_state import state
 from backend.api.routes_auth import verify_token
 from backend.executor.workflow_executor import WorkflowExecutor
 workflow_executor = WorkflowExecutor()
-from backend.storage.repository.audit_repository import (
-    audit_repo,
-)
+from backend.storage.audit_repository import audit_repo
 from backend.utils.logger import logger
 
 router = APIRouter()

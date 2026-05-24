@@ -3,7 +3,8 @@ import uuid
 from fastapi import APIRouter, UploadFile, File
 from backend.rag.loader import PDFLoader
 from backend.rag.splitter import TextSplitter
-from backend.rag.embeddings import embed
+from backend.rag.embedder import Embedder
+embed = Embedder().encode
 from backend.rag.vector_store import vector_store
 
 router = APIRouter()

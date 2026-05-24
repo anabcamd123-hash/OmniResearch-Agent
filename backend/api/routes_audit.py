@@ -7,9 +7,7 @@ from fastapi import APIRouter, Depends
 from backend.utils.permissions import (
     require_role,
 )
-from backend.storage.repository.audit_repository import (
-    audit_repo,
-)
+from backend.storage.audit_repository import audit_repo
 
 router = APIRouter(
     prefix="/audit", tags=["audit"]

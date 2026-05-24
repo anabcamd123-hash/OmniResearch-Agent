@@ -3,6 +3,7 @@ from backend.runtime.runtime_state import state
 from backend.runtime.workflow_state import (
     workflow_state,
 )
+from backend.runtime.dlq import dlq_count
 from backend.storage.repository import (
     TaskRepository,
     WorkflowRepository,
@@ -14,7 +15,6 @@ router = APIRouter()
 task_repo = TaskRepository()
 workflow_repo = WorkflowRepository()
 token_repo = TokenRepository()
-dlq_repo = DLQRepository()
 
 
 @router.get("/dashboard")

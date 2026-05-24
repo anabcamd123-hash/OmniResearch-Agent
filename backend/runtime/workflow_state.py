@@ -54,17 +54,23 @@ class WorkflowStateManager:
 
     def list_running(self) -> list[dict]:
         """列出所有 running 状态的 workflow"""
-        keys = redis_client.keys(
-            self.PREFIX + "*"
-        )
+        try:
+            keys = redis_client.keys(
+                self.PREFIX + "*"
+            )
+        except Exception:
+            return []
 
         result = []
         for key in keys:
-            data = redis_client.get(key)
-            if data:
-                state = json.loads(data)
-                if state.get("status") == "running":
-                    result.append(state)
+            try:
+                data = redis_client.get(key)
+                if data:
+                    state = json.loads(data)
+                    if state.get("status") == "running":
+                        result.append(state)
+            except Exception:
+                continue
 
         return result
 
