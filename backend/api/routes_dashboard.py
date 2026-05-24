@@ -60,6 +60,7 @@ async def dashboard():
         "agents": state.agent_status,
         "dag": state.current_dag,
         "timeline": state.timeline,
+        "task_status": state.task_status,
         "dlq_count": await dlq_count(),
         "auto_fix": {
             "retried_tasks": retry_tasks,

@@ -507,6 +507,11 @@
                 document.getElementById('statCompleted').textContent = d.completed_tasks || 0;
                 document.getElementById('statRunning').textContent = d.running_tasks || 0;
                 document.getElementById('statDLQ').textContent = d.dlq_count || 0;
+                // 同步更新 UI 组件
+                if (d.agents) updateAgents(d.agents);
+                if (d.current_dag) updateDAG(d.current_dag);
+                if (d.timeline) updateTimeline(d.timeline);
+                if (d.task_status) { taskStatus = d.task_status; renderTaskCards(); }
             } catch (e) {}
         }
         setInterval(fetchStats, 3000);
