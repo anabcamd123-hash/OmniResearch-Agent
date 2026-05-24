@@ -77,7 +77,9 @@ if FRONTEND_DIR.is_dir():
 @app.on_event("startup")
 async def startup():
     await init_db()
-    await rag_service.build_index()
+    # RAG 索引异步构建，不阻塞启动
+    import asyncio
+    asyncio.create_task(rag_service.build_index())
     register_events()
 
 

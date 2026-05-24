@@ -1,4 +1,5 @@
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -13,11 +14,13 @@ def _load_model():
         return None
     if _model is None:
         try:
+            # 设置较短的超时，避免长时间阻塞
+            os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
             from sentence_transformers import (
                 SentenceTransformer,
             )
             _model = SentenceTransformer(
-                "all-MiniLM-L6-v2"
+                "all-MiniLM-L6-v2",
             )
         except Exception as e:
             logger.warning(

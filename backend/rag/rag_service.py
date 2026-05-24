@@ -18,11 +18,17 @@ class RAGService:
             "learning memories..."
         )
 
-        memories = (
-            await self.memory_repo.get_learning_memories(
-                limit=2000
+        try:
+            memories = (
+                await self.memory_repo.get_learning_memories(
+                    limit=2000
+                )
             )
-        )
+        except Exception as e:
+            logger.warning(
+                f"[RAG] Failed to load memories: {e}"
+            )
+            return
 
         count = 0
         for m in memories:
@@ -30,10 +36,13 @@ class RAGService:
             content = m["content"]
 
             if content and len(content) > 10:
-                self.retriever.add_document(
-                    content
-                )
-                count += 1
+                try:
+                    self.retriever.add_document(
+                        content
+                    )
+                    count += 1
+                except Exception:
+                    pass
 
         logger.info(
             f"[RAG] Index built: "
